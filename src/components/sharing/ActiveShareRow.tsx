@@ -7,7 +7,7 @@ import { formatSize, formatTimeShort } from "@/lib/formatUtils";
 import type { Project } from "@/types";
 import { DEFAULT_PROJECT_STATUSES } from "@/types";
 
-function normalizePath(p: string): string {
+export function normalizePath(p: string): string {
   return p
     .replace(/^\\\\\?\\/, "")
     .replace(/[\\/]+$/, "")
@@ -189,5 +189,3 @@ export default function ActiveShareRow({ share, project }: ActiveShareRowProps) 
     </div>
   );
 }
-
-export { normalizePath };

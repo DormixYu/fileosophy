@@ -268,20 +268,21 @@ export const searchApi = {
 // ── 导入导出 ──────────────────────────────────────────────────
 
 export const exportApi = {
-  /** 导出单个项目（JSON 完整数据 或 CSV 摘要） */
-  exportProject: (projectId: number, format: string) =>
-    invoke<string>("export_project", { projectId, format }),
+  /** 导出单个项目（JSON 完整数据 或 CSV 摘要），可选包含文件内容 */
+  exportProject: (projectId: number, format: string, includeFiles?: boolean) =>
+    invoke<string>("export_project", { projectId, format, includeFiles: includeFiles ?? null }),
 
-  /** 导出所有项目（JSON 完整备份） */
-  exportAllProjects: () => invoke<string>("export_all_projects"),
+  /** 导出所有项目（JSON 完整备份），可选包含文件内容 */
+  exportAllProjects: (includeFiles?: boolean) =>
+    invoke<string>("export_all_projects", { includeFiles: includeFiles ?? null }),
 
   /** 导入单个项目 */
   importProject: (filePath: string) =>
     invoke<Project>("import_project", { filePath }),
 
-  /** 从备份文件导入所有项目 */
-  importAllProjects: (filePath: string) =>
-    invoke<Project[]>("import_all_projects", { filePath }),
+  /** 从备份文件导入所有项目，可选替换现有数据 */
+  importAllProjects: (filePath: string, replace?: boolean) =>
+    invoke<Project[]>("import_all_projects", { filePath, replace: replace ?? false }),
 };
 
 // ── 文件夹扫描/导入 ──────────────────────────────────────────
@@ -359,7 +360,7 @@ export const shareApi = {
 
 export const systemApi = {
   localIp: () => invoke<string>("get_local_ip"),
-  convertFileSrc: (path: string) => convertFileSrc(path),
+  convertFileSrc: (path: string) => convertFileSrc(path.replace(/\\/g, '/')),
   openUserGuide: () => invoke<void>("open_user_guide"),
 };
 

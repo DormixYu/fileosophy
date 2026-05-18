@@ -155,19 +155,7 @@ export default function Layout() {
           </div>
         </div>
 
-        {/* ── 品牌理念 ── */}
-        <div
-          className="px-5 py-2 text-center border-t"
-          style={{ borderColor: "var(--border-light)" }}
-        >
-          <p
-            className="text-caption italic font-serif tracking-wide"
-            style={{ color: "var(--text-dim)" }}
-          >
-            在有序的体系中迸发思想的自由
-          </p>
-        </div>
-
+        
         {/* ── 用户区 ── */}
         <NavLink
           to="/settings?tab=profile"

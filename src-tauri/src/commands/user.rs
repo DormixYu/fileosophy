@@ -140,7 +140,7 @@ pub fn upload_avatar(
     let filepath = avatars_dir.join(&filename);
     fs::write(&filepath, &bytes).map_err(|e| format!("保存头像失败: {e}"))?;
 
-    let path_str = filepath.to_string_lossy().to_string();
+    let path_str = filepath.to_string_lossy().replace('\\', "/");
 
     // 更新当前用户的头像路径
     let conn = db.lock().map_err(|e| e.to_string())?;

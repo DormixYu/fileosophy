@@ -8,6 +8,7 @@ import {
   ArrowDown,
 } from "lucide-react";
 import { formatDate } from "@/lib/formatUtils";
+import { normalizePath } from "@/components/sharing/ActiveShareRow";
 import InCellStatusDropdown from "./InCellStatusDropdown";
 import type {
   Project,
@@ -314,23 +315,18 @@ export default function ProjectTable({
               ))}
               <td className="px-3 py-2 text-right">
                 <div className="flex items-center justify-end gap-1">
-                  {shareStatus.find(s => s.path === project.folder_path) && (
-                    <span
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] mr-1"
-                      style={{ background: "var(--gold-glow-strong)", color: "var(--gold)", border: "1px solid var(--color-primary-200)" }}
-                      title={`共享中 · 端口 ${shareStatus.find(s => s.path === project.folder_path)!.port}`}
-                    >
-                      <Share2 size={10} strokeWidth={1.5} />
-                      共享中
-                    </span>
-                  )}
-                  <button
+                                    <button
                     onClick={(e) => {
                       e.stopPropagation();
                       setShareProject(project);
                     }}
                     className="p-1 rounded transition-colors hover-gold-bg hover-gold-text"
-                    style={{ color: "var(--text-muted)", cursor: "pointer", background: "none", border: "none" }}
+                    style={{
+                      color: shareStatus.find(s => normalizePath(s.path) === normalizePath(project.folder_path || "")) ? "var(--gold)" : "var(--text-muted)",
+                      background: shareStatus.find(s => normalizePath(s.path) === normalizePath(project.folder_path || "")) ? "var(--gold-glow)" : "none",
+                      border: shareStatus.find(s => normalizePath(s.path) === normalizePath(project.folder_path || "")) ? "1px solid var(--gold)" : "none",
+                      cursor: "pointer",
+                    }}
                     title="分享项目"
                     aria-label="分享项目"
                   >

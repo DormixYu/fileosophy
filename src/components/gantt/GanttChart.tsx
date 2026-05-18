@@ -641,9 +641,13 @@ function getDateRange(tasks: GanttTask[]) {
     if (end > max) max = end;
   }
 
-  // 与全局一致：前扩5天，后扩10天
+  // 前扩5天，后扩10天，确保今天可见
   min = addDays(min, -5);
   max = addDays(max, 10);
+
+  const today = getToday();
+  if (today < min) min = addDays(today, -15);
+  if (today > max) max = addDays(today, 10);
 
   return { minDate: min, maxDate: max };
 }

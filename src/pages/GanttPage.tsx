@@ -149,6 +149,9 @@ export default function GanttPage() {
     }
     min = addDays(min, -5);
     max = addDays(max, 10);
+    // 确保今天在可见范围内
+    if (today < min) min = addDays(today, -15);
+    if (today > max) max = addDays(today, 10);
     return { minDate: min, totalDays: daysBetween(min, max) + 1 };
   }, [filteredProjects]);
 
@@ -566,8 +569,8 @@ function GanttRow({
 
   // 使用 ganttUtils 的 buildSegments 替代有 bug 的内联版本
   const segments = useMemo(
-    () => buildSegments(project, histories, dayWidth, getStatusConfig),
-    [project, histories, dayWidth, getStatusConfig],
+    () => buildSegments(project, histories, dayWidth, getStatusConfig, minDate),
+    [project, histories, dayWidth, getStatusConfig, minDate],
   );
 
   return (
