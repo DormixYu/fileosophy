@@ -1,20 +1,16 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/DormixYu/Fileosophy/main/assets/logo-dark.svg">
-    <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/DormixYu/Fileosophy/main/assets/logo-light.svg">
-    <img alt="飞序 · Fileosophy" src="https://raw.githubusercontent.com/DormixYu/Fileosophy/main/assets/logo-dark.svg" width="140">
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/DormixYu/Fileosophy/main/assets/logo-hori-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/DormixYu/Fileosophy/main/assets/logo-hori-light.svg">
+    <img alt="飞序 · Fileosophy" src="https://raw.githubusercontent.com/DormixYu/Fileosophy/main/assets/logo-hori-dark.svg" width="360">
   </picture>
 </p>
 
-<h1 align="center" style="font-weight:300; letter-spacing:0.35em;">飞序 · Fileosophy</h1>
-
-<p align="center" style="font-weight:300; letter-spacing:0.4em; color:#b8b2a6; margin-top:4px;">在有序的体系中迸发思想的自由</p>
-
-<p align="center" style="color:#7a7368; font-size:14px; margin-top:12px;">
+<p align="center" style="color:#7a7368; font-size:14px; margin-top:6px;">
   轻量级桌面项目管理工具 — 看板 · 甘特图 · 文件共享 · 局域网协作
 </p>
 
-<p align="center" style="margin-top:16px;">
+<p align="center" style="margin-top:12px;">
   <img src="https://img.shields.io/badge/version-1.0.0-blue?style=flat-square" alt="version" />
   <img src="https://img.shields.io/badge/Tauri-2.x-orange?style=flat-square" alt="tauri" />
   <img src="https://img.shields.io/badge/Rust-2021-dea584?style=flat-square" alt="rust" />
@@ -46,17 +42,6 @@
 | **全局搜索** | `Ctrl+Shift+F` 跨项目全文检索 |
 | **通知系统** | Toast 即时弹窗 + 通知历史面板，支持路由跳转链接 |
 | **双主题** | 墨渊暗色 / 羊皮纸亮色，噪点纹理 + 鎏金点缀 |
-
-<!-- 截图区域，添加后取消注释
----
-
-## 截图
-
-<p align="center">
-  <img src="screenshots/dashboard-dark.png" width="45%" alt="Dashboard 暗色" />
-  <img src="screenshots/dashboard-light.png" width="45%" alt="Dashboard 亮色" />
-</p>
--->
 
 ## 技术栈
 
@@ -196,8 +181,8 @@ SQLite 8 张表 + 索引，外键 `ON DELETE CASCADE`：
 飞序的品牌标识将**文档的秩序结构**与一道**流动的思绪曲线**融为一体——飞鸟般的笔触划过严谨的文件轮廓，寓意在有序的体系中迸发思想的自由。
 
 ```
-墨渊   #16120E    古卷   #221D17    墨渍   #7A7368
-羊皮纸 #F6F1E6    鎏金   #C49B51    暗鎏金 #9B7428
+墨渊   #0A0A0A    古卷   #1A1A1A    墨渍   #5A5550
+羊皮纸 #F0ECE4    鎏金   #C9A84C    暗鎏金 #A67C00
 ```
 
 字体：Cormorant Garamond Light（标题）+ DM Mono Light（正文）
@@ -205,9 +190,3 @@ SQLite 8 张表 + 索引，外键 `ON DELETE CASCADE`：
 ## 协议
 
 MIT License
-
----
-
-<p align="center" style="color:#4a4540; font-size:11px; letter-spacing:0.2em;">
-  飞序 · Fileosophy — 秩序的哲学
-</p>

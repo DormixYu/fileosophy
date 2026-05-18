@@ -1,5 +1,4 @@
 import { formatDate, formatDateTime } from "@/lib/formatUtils";
-import { daysBetween, NAME_WIDTH, ROW_HEIGHT } from "@/lib/ganttUtils";
 import type {
   Project,
   ProjectStatusConfig,
@@ -8,10 +7,7 @@ import type {
 
 interface TooltipPopupProps {
   project: Project;
-  rowIndex: number;
-  containerRef: React.RefObject<HTMLDivElement | null>;
-  minDate: string;
-  dayWidth: number;
+  mousePos: { x: number; y: number };
   getStatusConfig: (id?: string | null) => ProjectStatusConfig | undefined;
   histories: ProjectStatusHistory[];
   onClose: () => void;
@@ -19,10 +15,7 @@ interface TooltipPopupProps {
 
 export default function TooltipPopup({
   project,
-  rowIndex,
-  containerRef,
-  minDate,
-  dayWidth,
+  mousePos,
   getStatusConfig,
   histories,
   onClose,
@@ -32,21 +25,10 @@ export default function TooltipPopup({
     (a, b) => b.changed_at.localeCompare(a.changed_at),
   );
 
-  // 根据项目行和甘特条位置计算 tooltip 定位
-  const barStartOffset = project.start_date
-    ? daysBetween(minDate, project.start_date) * dayWidth + NAME_WIDTH
-    : 0;
-  const barCenterX = barStartOffset + 120; // 偏移条中心
-  const barTopY = rowIndex * ROW_HEIGHT + ROW_HEIGHT / 2;
-
-  const containerEl = containerRef.current;
-  const scrollLeft = containerEl?.scrollLeft || 0;
-  const scrollTop = containerEl?.scrollTop || 0;
-
   const style: React.CSSProperties = {
     position: "fixed",
-    left: Math.min(barCenterX - scrollLeft + 60, window.innerWidth - 260),
-    top: Math.max(8, (barTopY - scrollTop + (containerEl?.getBoundingClientRect().top ?? 0)) - 140),
+    left: Math.min(mousePos.x + 12, window.innerWidth - 260),
+    top: Math.max(8, mousePos.y - 10),
     zIndex: 100,
     width: 240,
   };

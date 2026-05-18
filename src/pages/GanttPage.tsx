@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { Search, Diamond } from "lucide-react";
 import { useProjectStore } from "@/stores/useProjectStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
@@ -31,6 +32,7 @@ import MilestoneModal from "@/components/gantt/MilestoneModal";
 import StatusHistoryModal from "@/components/gantt/StatusHistoryModal";
 
 export default function GanttPage() {
+  const navigate = useNavigate();
   const { projects, fetchProjects, loading } = useProjectStore();
   const { parsedStatuses } = useSettingsStore();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -44,6 +46,7 @@ export default function GanttPage() {
   const [histories, setHistories] = useState<ProjectStatusHistory[]>([]);
   const [milestones, setMilestones] = useState<ProjectMilestone[]>([]);
   const [hoveredProject, setHoveredProject] = useState<Project | null>(null);
+  const [hoveredMousePos, setHoveredMousePos] = useState<{ x: number; y: number } | null>(null);
   const [milestoneProject, setMilestoneProject] = useState<Project | null>(null);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
 
@@ -224,12 +227,6 @@ export default function GanttPage() {
     else next.add(value);
     setter(next);
   };
-
-  // 计算 hoveredProject 对应的行索引，用于 tooltip 定位
-  const hoveredRowIndex = useMemo(() => {
-    if (!hoveredProject) return -1;
-    return filteredProjects.findIndex((p) => p.id === hoveredProject.id);
-  }, [hoveredProject, filteredProjects]);
 
   if (loading) {
     return (
@@ -475,7 +472,7 @@ export default function GanttPage() {
               <div
                 className="absolute top-0 bottom-0 w-0.5 z-10 pointer-events-none"
                 style={{
-                  left: daysBetween(minDate, getToday()) * dayWidth,
+                  left: NAME_WIDTH + daysBetween(minDate, getToday()) * dayWidth,
                   background: "var(--color-danger)",
                   opacity: 0.6,
                 }}
@@ -492,7 +489,8 @@ export default function GanttPage() {
                   histories={histories.filter((h) => h.project_id === project.id)}
                   milestones={milestonesByProject.get(project.id) || []}
                   onEditStatusHistory={() => setEditingProject(project)}
-                  onHover={(p) => setHoveredProject(p)}
+                  onNavigate={() => navigate(`/project/${project.id}`)}
+                  onHover={(p, pos) => { setHoveredProject(p); setHoveredMousePos(pos ?? null); }}
                   onManageMilestones={() => setMilestoneProject(project)}
                 />
               ))}
@@ -502,16 +500,13 @@ export default function GanttPage() {
       </div>
 
       {/* 工具提示浮窗 */}
-      {hoveredProject && (
+      {hoveredProject && hoveredMousePos && (
         <GanttTooltip
           project={hoveredProject}
-          rowIndex={hoveredRowIndex}
-          containerRef={containerRef}
-          minDate={minDate}
-          dayWidth={dayWidth}
+          mousePos={hoveredMousePos}
           getStatusConfig={getStatusConfig}
           histories={histories.filter((h) => h.project_id === hoveredProject.id)}
-          onClose={() => setHoveredProject(null)}
+          onClose={() => { setHoveredProject(null); setHoveredMousePos(null); }}
         />
       )}
 
@@ -550,6 +545,7 @@ function GanttRow({
   histories,
   milestones,
   onEditStatusHistory,
+  onNavigate,
   onHover,
   onManageMilestones,
 }: {
@@ -561,7 +557,8 @@ function GanttRow({
   histories: ProjectStatusHistory[];
   milestones: ProjectMilestone[];
   onEditStatusHistory: () => void;
-  onHover: (p: Project | null) => void;
+  onNavigate: () => void;
+  onHover: (p: Project | null, pos?: { x: number; y: number } | null) => void;
   onManageMilestones: () => void;
 }) {
   const statusConfig = getStatusConfig(project.status);
@@ -586,7 +583,7 @@ function GanttRow({
           background: "var(--bg-surface)",
           borderColor: "var(--border-light)",
         }}
-        onClick={onEditStatusHistory}
+        onClick={onNavigate}
         title={project.name}
       >
         <span
@@ -646,7 +643,7 @@ function GanttRow({
               e.stopPropagation();
               onEditStatusHistory();
             }}
-            onMouseEnter={() => onHover(project)}
+            onMouseEnter={(e) => onHover(project, { x: e.clientX, y: e.clientY })}
             onMouseLeave={() => onHover(null)}
           />
         ))}
