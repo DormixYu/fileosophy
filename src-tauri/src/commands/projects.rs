@@ -1,4 +1,4 @@
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, State};
 
 use crate::db::models::Project;
 use crate::db::DbConn;
@@ -236,7 +236,6 @@ pub fn create_project(
     }
 
     tx_result.inspect(|project| {
-        let _ = app.emit(events::EVENT_PROJECT_UPDATED, project.id);
         events::emit_notification(&app, "success", "项目已创建", &project.name, Some(&format!("/project/{}", project.id)));
     })
 }
@@ -375,7 +374,6 @@ pub fn update_project(
     }
 
     get_project_by_id_inner(&conn, id).inspect(|project| {
-        let _ = app.emit(events::EVENT_PROJECT_UPDATED, project.id);
         // 仅当状态变更时发送通知
         if status.is_some() && old_status.as_ref() != status.as_ref() {
             let status_label = match project.status.as_deref() {
@@ -402,7 +400,6 @@ pub fn delete_project(app: AppHandle, db: State<'_, DbConn>, id: i64) -> Result<
     conn.execute("DELETE FROM projects WHERE id = ?1", [id])
         .map_err(|e| e.to_string())?;
 
-    let _ = app.emit(events::EVENT_PROJECT_UPDATED, id);
     events::emit_notification(&app, "warning", "项目已删除", &name, None);
 
     Ok(())

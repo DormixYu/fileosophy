@@ -1,7 +1,7 @@
 use crate::db::DbConn;
 use crate::db::models::{GanttTask, KanbanBoard, KanbanCard, KanbanColumn};
 use crate::events;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, State};
 
 /// 从行构造 KanbanColumn（含 column_type）
 fn row_to_column(row: &rusqlite::Row) -> rusqlite::Result<KanbanColumn> {
@@ -80,7 +80,6 @@ pub fn get_kanban_board(db: State<'_, DbConn>, project_id: i64) -> Result<Kanban
 
 #[tauri::command]
 pub fn add_column(
-    app: AppHandle,
     db: State<'_, DbConn>,
     project_id: i64,
     title: String,
@@ -112,9 +111,6 @@ pub fn add_column(
         row_to_column,
     )
     .map_err(|e| e.to_string())
-    .inspect(|_| {
-        let _ = app.emit(events::EVENT_PROJECT_UPDATED, project_id);
-    })
 }
 
 #[tauri::command]
@@ -160,7 +156,6 @@ pub fn create_card(
             [card.column_id],
             |row| row.get::<_, i64>(0),
         ) {
-            let _ = app.emit(events::EVENT_PROJECT_UPDATED, project_id);
             let link = format!("/project/{}", project_id);
             events::emit_notification(&app, "info", "新卡片", &card.title, Some(&link));
         }
@@ -214,15 +209,6 @@ pub fn move_card(
         }
     }
 
-    let _ = app.emit(
-        events::EVENT_CARD_MOVED,
-        serde_json::json!({
-            "card_id": card_id,
-            "target_column_id": target_column_id,
-            "position": position,
-        }),
-    );
-
     let card_title: String = conn.query_row(
         "SELECT title FROM kanban_cards WHERE id = ?1", [card_id],
         |row| row.get(0),
@@ -243,21 +229,12 @@ pub fn move_card(
 
 #[tauri::command]
 pub fn update_column(
-    app: AppHandle,
     db: State<'_, DbConn>,
     column_id: i64,
     title: String,
     column_type: Option<String>,
 ) -> Result<KanbanColumn, String> {
     let conn = db.lock().map_err(|e| e.to_string())?;
-
-    let project_id: i64 = conn
-        .query_row(
-            "SELECT project_id FROM kanban_columns WHERE id = ?1",
-            [column_id],
-            |row| row.get(0),
-        )
-        .map_err(|e| e.to_string())?;
 
     conn.execute(
         "UPDATE kanban_columns SET title = ?1, column_type = ?2 WHERE id = ?3",
@@ -271,64 +248,36 @@ pub fn update_column(
         row_to_column,
     )
     .map_err(|e| e.to_string())
-    .inspect(|_| {
-        let _ = app.emit(events::EVENT_PROJECT_UPDATED, project_id);
-    })
 }
 
 #[tauri::command]
 pub fn delete_column(
-    app: AppHandle,
     db: State<'_, DbConn>,
     column_id: i64,
 ) -> Result<(), String> {
     let conn = db.lock().map_err(|e| e.to_string())?;
 
-    let project_id: i64 = conn
-        .query_row(
-            "SELECT project_id FROM kanban_columns WHERE id = ?1",
-            [column_id],
-            |row| row.get(0),
-        )
-        .map_err(|e| e.to_string())?;
-
     conn.execute("DELETE FROM kanban_columns WHERE id = ?1", [column_id])
         .map_err(|e| e.to_string())?;
-
-    let _ = app.emit(events::EVENT_PROJECT_UPDATED, project_id);
 
     Ok(())
 }
 
 #[tauri::command]
 pub fn delete_card(
-    app: AppHandle,
     db: State<'_, DbConn>,
     card_id: i64,
 ) -> Result<(), String> {
     let conn = db.lock().map_err(|e| e.to_string())?;
 
-    let project_id: i64 = conn
-        .query_row(
-            "SELECT kc.project_id FROM kanban_cards c \
-             JOIN kanban_columns kc ON c.column_id = kc.id \
-             WHERE c.id = ?1",
-            [card_id],
-            |row| row.get(0),
-        )
-        .map_err(|e| e.to_string())?;
-
     conn.execute("DELETE FROM kanban_cards WHERE id = ?1", [card_id])
         .map_err(|e| e.to_string())?;
-
-    let _ = app.emit(events::EVENT_PROJECT_UPDATED, project_id);
 
     Ok(())
 }
 
 #[tauri::command]
 pub fn update_card(
-    app: AppHandle,
     db: State<'_, DbConn>,
     card_id: i64,
     title: Option<String>,
@@ -391,15 +340,6 @@ pub fn update_card(
         row_to_card,
     )
     .map_err(|e| e.to_string())
-    .inspect(|card| {
-        if let Ok(project_id) = conn.query_row(
-            "SELECT project_id FROM kanban_columns WHERE id = ?1",
-            [card.column_id],
-            |row| row.get::<_, i64>(0),
-        ) {
-            let _ = app.emit(events::EVENT_PROJECT_UPDATED, project_id);
-        }
-    })
 }
 
 // ── 看板与甘特图联动命令 ────────────────────────────────────────────
@@ -412,7 +352,6 @@ pub struct LinkCardResult {
 
 #[tauri::command]
 pub fn link_card_to_gantt(
-    app: AppHandle,
     db: State<'_, DbConn>,
     card_id: i64,
     task_name: String,
@@ -477,13 +416,11 @@ pub fn link_card_to_gantt(
         },
     ).map_err(|e| e.to_string())?;
 
-    let _ = app.emit(events::EVENT_PROJECT_UPDATED, project_id);
     Ok(LinkCardResult { card, task })
 }
 
 #[tauri::command]
 pub fn unlink_card_from_gantt(
-    app: AppHandle,
     db: State<'_, DbConn>,
     card_id: i64,
 ) -> Result<KanbanCard, String> {
@@ -500,19 +437,11 @@ pub fn unlink_card_from_gantt(
         row_to_card,
     ).map_err(|e| e.to_string())?;
 
-    let project_id: i64 = conn.query_row(
-        "SELECT kc.project_id FROM kanban_cards c JOIN kanban_columns kc ON c.column_id = kc.id WHERE c.id = ?1",
-        [card_id],
-        |row| row.get(0),
-    ).map_err(|e| format!("查询卡片所属项目失败: {e}"))?;
-
-    let _ = app.emit(events::EVENT_PROJECT_UPDATED, project_id);
     Ok(card)
 }
 
 #[tauri::command]
 pub fn sync_gantt_to_kanban(
-    app: AppHandle,
     db: State<'_, DbConn>,
     task_id: i64,
 ) -> Result<KanbanCard, String> {
@@ -567,6 +496,5 @@ pub fn sync_gantt_to_kanban(
         row_to_card,
     ).map_err(|e| e.to_string())?;
 
-    let _ = app.emit(events::EVENT_PROJECT_UPDATED, project_id);
     Ok(card)
 }

@@ -1,8 +1,7 @@
-use tauri::{AppHandle, Emitter, State};
+use tauri::State;
 
 use crate::db::models::ProjectStatusHistory;
 use crate::db::DbConn;
-use crate::events;
 
 fn row_to_status_history(row: &rusqlite::Row) -> rusqlite::Result<ProjectStatusHistory> {
     Ok(ProjectStatusHistory {
@@ -57,7 +56,6 @@ pub fn get_all_status_histories(
 
 #[tauri::command]
 pub fn add_status_history(
-    app: AppHandle,
     db: State<'_, DbConn>,
     project_id: i64,
     status: String,
@@ -70,13 +68,11 @@ pub fn add_status_history(
     ).map_err(|e| e.to_string())?;
     let id = conn.last_insert_rowid();
     let result = ProjectStatusHistory { id, project_id, status, changed_at };
-    let _ = app.emit(events::EVENT_PROJECT_UPDATED, project_id);
     Ok(result)
 }
 
 #[tauri::command]
 pub fn update_status_history(
-    app: AppHandle,
     db: State<'_, DbConn>,
     id: i64,
     status: String,
@@ -91,27 +87,18 @@ pub fn update_status_history(
         "SELECT id, project_id, status, changed_at FROM project_status_history WHERE id = ?1",
         [id], row_to_status_history,
     ).map_err(|e| e.to_string())?;
-    let _ = app.emit(events::EVENT_PROJECT_UPDATED, result.project_id);
     Ok(result)
 }
 
 #[tauri::command]
 pub fn delete_status_history(
-    app: AppHandle,
     db: State<'_, DbConn>,
     id: i64,
 ) -> Result<(), String> {
     let conn = db.lock().map_err(|e| e.to_string())?;
-    // 先查询 project_id，删除后 emit
-    let project_id: i64 = conn.query_row(
-        "SELECT project_id FROM project_status_history WHERE id = ?1",
-        [id],
-        |row| row.get(0),
-    ).map_err(|e| e.to_string())?;
     conn.execute(
         "DELETE FROM project_status_history WHERE id = ?1",
         [id],
     ).map_err(|e| e.to_string())?;
-    let _ = app.emit(events::EVENT_PROJECT_UPDATED, project_id);
     Ok(())
 }

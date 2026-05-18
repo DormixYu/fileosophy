@@ -29,6 +29,8 @@
     }
   },
   "bundle": {
+    "shortDescription": "项目及文件管理工具",
+    "copyright": "FrankYu@fileosophy",
     "icon": [
       "icons/icon.png",
       "icons/icon.ico"

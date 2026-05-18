@@ -2,9 +2,8 @@ use crate::db::DbConn;
 use super::projects::{row_to_project, PROJECT_COLUMNS, DEFAULT_PROJECT_TYPES_JSON, generate_project_number, get_system_username};
 use crate::commands::utils::get_setting;
 use crate::db::models::ScannedFolder;
-use crate::events;
 use regex::Regex;
-use tauri::{AppHandle, Emitter, State};
+use tauri::State;
 
 /// 将文件夹模板转为正则，提取 {code} 和 {name} 的捕获组
 fn template_to_regex(template: &str) -> Regex {
@@ -280,7 +279,6 @@ pub fn scan_project_folders(db: State<'_, DbConn>, parent_path: String) -> Resul
 /// 从已有的文件夹导入为项目
 #[tauri::command]
 pub fn import_project_from_folder(
-    app: AppHandle,
     db: State<'_, DbConn>,
     parent_path: String,
     folder_name: String,
@@ -320,11 +318,6 @@ pub fn import_project_from_folder(
         row_to_project,
     )
     .map_err(|e| e.to_string())
-    .inspect(|project| {
-        log::info!("[import] Returned project: id={}, number={:?}, name={}, type={:?}, date={:?}, folder={:?}",
-            project.id, project.project_number, project.name, project.project_type, project.start_date, project.folder_path);
-        let _ = app.emit(events::EVENT_PROJECT_UPDATED, project.id);
-    })
 }
 
 #[cfg(test)]

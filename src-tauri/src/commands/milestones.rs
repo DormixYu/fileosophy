@@ -1,8 +1,7 @@
-use tauri::{AppHandle, Emitter, State};
+use tauri::State;
 
 use crate::db::models::ProjectMilestone;
 use crate::db::DbConn;
-use crate::events;
 
 fn row_to_milestone(row: &rusqlite::Row) -> rusqlite::Result<ProjectMilestone> {
     Ok(ProjectMilestone {
@@ -17,7 +16,6 @@ fn row_to_milestone(row: &rusqlite::Row) -> rusqlite::Result<ProjectMilestone> {
 
 #[tauri::command]
 pub fn add_project_milestone(
-    app: AppHandle,
     db: State<'_, DbConn>,
     project_id: i64,
     name: String,
@@ -39,14 +37,10 @@ pub fn add_project_milestone(
         row_to_milestone,
     )
     .map_err(|e| e.to_string())
-    .inspect(|_| {
-        let _ = app.emit(events::EVENT_PROJECT_UPDATED, project_id);
-    })
 }
 
 #[tauri::command]
 pub fn update_project_milestone(
-    app: AppHandle,
     db: State<'_, DbConn>,
     id: i64,
     name: Option<String>,
@@ -54,14 +48,6 @@ pub fn update_project_milestone(
     description: Option<String>,
 ) -> Result<ProjectMilestone, String> {
     let conn = db.lock().map_err(|e| e.to_string())?;
-
-    let project_id: i64 = conn
-        .query_row(
-            "SELECT project_id FROM project_milestones WHERE id = ?1",
-            [id],
-            |row| row.get(0),
-        )
-        .map_err(|e| e.to_string())?;
 
     let mut sets = Vec::new();
     let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
@@ -101,31 +87,17 @@ pub fn update_project_milestone(
         row_to_milestone,
     )
     .map_err(|e| e.to_string())
-    .inspect(|_| {
-        let _ = app.emit(events::EVENT_PROJECT_UPDATED, project_id);
-    })
 }
 
 #[tauri::command]
 pub fn delete_project_milestone(
-    app: AppHandle,
     db: State<'_, DbConn>,
     id: i64,
 ) -> Result<(), String> {
     let conn = db.lock().map_err(|e| e.to_string())?;
 
-    let project_id: i64 = conn
-        .query_row(
-            "SELECT project_id FROM project_milestones WHERE id = ?1",
-            [id],
-            |row| row.get(0),
-        )
-        .map_err(|e| e.to_string())?;
-
     conn.execute("DELETE FROM project_milestones WHERE id = ?1", [id])
         .map_err(|e| e.to_string())?;
-
-    let _ = app.emit(events::EVENT_PROJECT_UPDATED, project_id);
 
     Ok(())
 }

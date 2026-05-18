@@ -70,9 +70,6 @@ export const projectApi = {
   openFile: (path: string) => invoke<void>("open_file", { path }),
 
   // 状态变更历史
-  getStatusHistory: (projectId: number) =>
-    invoke<ProjectStatusHistory[]>("get_project_status_history", { projectId }),
-
   getAllStatusHistories: () =>
     invoke<ProjectStatusHistory[]>("get_all_status_histories"),
 
@@ -108,9 +105,6 @@ export const projectApi = {
 
   deleteMilestone: (id: number) =>
     invoke<void>("delete_project_milestone", { id }),
-
-  getMilestones: (projectId: number) =>
-    invoke<ProjectMilestone[]>("get_project_milestones", { projectId }),
 
   getAllMilestones: () =>
     invoke<ProjectMilestone[]>("get_all_milestones"),
@@ -208,8 +202,6 @@ export const fileApi = {
 
   delete: (fileId: number) => invoke<void>("delete_file", { fileId }),
 
-  download: (fileId: number) => invoke<string>("download_file", { fileId }),
-
   openStoredFile: (fileId: number) => invoke<void>("open_stored_file", { fileId }),
 
   preview: (fileId: number) => invoke<FilePreview>("preview_file", { fileId }),
@@ -236,15 +228,6 @@ export const settingsApi = {
 
 export const notificationHistoryApi = {
   getAll: () => invoke<Notification[]>("get_notifications"),
-
-  add: (notif: Omit<Notification, "read" | "created_at">) =>
-    invoke<void>("add_notification", {
-      id: notif.id,
-      type_: notif.type,
-      title: notif.title,
-      message: notif.message,
-      link: notif.link ?? null,
-    }),
 
   markRead: (id: string) => invoke<void>("mark_notification_read", { id }),
 
@@ -275,10 +258,6 @@ export const exportApi = {
   /** 导出所有项目（JSON 完整备份），可选包含文件内容 */
   exportAllProjects: (includeFiles?: boolean) =>
     invoke<string>("export_all_projects", { includeFiles: includeFiles ?? null }),
-
-  /** 导入单个项目 */
-  importProject: (filePath: string) =>
-    invoke<Project>("import_project", { filePath }),
 
   /** 从备份文件导入所有项目，可选替换现有数据 */
   importAllProjects: (filePath: string, replace?: boolean) =>
@@ -321,11 +300,6 @@ export const shortcutApi = {
   unregister: (shortcut: string) =>
     import("@tauri-apps/plugin-global-shortcut").then((m) =>
       m.unregister(shortcut)
-    ),
-
-  isRegistered: (shortcut: string) =>
-    import("@tauri-apps/plugin-global-shortcut").then((m) =>
-      m.isRegistered(shortcut)
     ),
 };
 

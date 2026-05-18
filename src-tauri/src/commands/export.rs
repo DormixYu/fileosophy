@@ -1,10 +1,9 @@
 use crate::db::DbConn;
 use super::projects::{row_to_project, PROJECT_COLUMNS};
 use crate::db::models::{FileEntry, FileEntryWithContent, GanttTask, KanbanCard, KanbanColumn, ProjectExport};
-use crate::events;
 use base64::{Engine, engine::general_purpose::STANDARD};
 use std::collections::HashMap;
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Manager, State};
 
 fn load_kanban_columns(conn: &rusqlite::Connection, project_id: i64) -> Result<Vec<KanbanColumn>, String> {
     let mut stmt = conn
@@ -264,14 +263,13 @@ fn export_to_csv(export: &ProjectExport) -> Result<String, String> {
 
 /// 导入项目（支持完整 JSON 和简单项目 JSON）
 #[tauri::command]
-pub fn import_project(app: AppHandle, db: State<'_, DbConn>, file_path: String) -> Result<crate::db::models::Project, String> {
+pub fn import_project(db: State<'_, DbConn>, file_path: String) -> Result<crate::db::models::Project, String> {
     let content = std::fs::read_to_string(&file_path).map_err(|e| e.to_string())?;
 
     // 尝试解析为完整导出格式
     if let Ok(export) = serde_json::from_str::<ProjectExport>(&content) {
         let conn = db.lock().map_err(|e| e.to_string())?;
         let project = import_full_project_impl(&conn, export)?;
-        let _ = app.emit(events::EVENT_PROJECT_UPDATED, project.id);
         return Ok(project);
     }
 
@@ -315,7 +313,6 @@ pub fn import_project(app: AppHandle, db: State<'_, DbConn>, file_path: String) 
     }
 
     let imported = tx_result?;
-    let _ = app.emit(events::EVENT_PROJECT_UPDATED, imported.id);
     Ok(imported)
 }
 
@@ -531,7 +528,6 @@ pub fn import_all_projects(app: AppHandle, db: State<'_, DbConn>, file_path: Str
         let _ = app_data_dir; // 用于后续文件内容还原
         // TODO: 处理 files_with_content 中的 base64 文件内容写入
 
-        let _ = app.emit(events::EVENT_PROJECT_UPDATED, project.id);
         imported.push(project);
     }
 

@@ -51,17 +51,6 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
       history: [record, ...state.history],
       unreadCount: state.unreadCount + 1,
     }));
-
-    // 持久化到后端（异步，不影响本地显示）
-    notificationHistoryApi
-      .add({
-        id: record.id,
-        type: notif.type,
-        title: notif.title,
-        message: notif.message,
-        link: notif.link,
-      })
-      .catch((e) => console.error("Failed to persist notification:", e));
   },
 
   fetchHistory: async () => {
