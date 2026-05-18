@@ -1,9 +1,10 @@
 use crate::db::DbConn;
 use super::projects::{row_to_project, PROJECT_COLUMNS};
-use crate::db::models::{FileEntry, GanttTask, KanbanCard, KanbanColumn, ProjectExport};
+use crate::db::models::{FileEntry, FileEntryWithContent, GanttTask, KanbanCard, KanbanColumn, ProjectExport};
 use crate::events;
+use base64::{Engine, engine::general_purpose::STANDARD};
 use std::collections::HashMap;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 fn load_kanban_columns(conn: &rusqlite::Connection, project_id: i64) -> Result<Vec<KanbanColumn>, String> {
     let mut stmt = conn
@@ -124,12 +125,14 @@ fn load_project_files(conn: &rusqlite::Connection, project_id: i64) -> Result<Ve
     Ok(files)
 }
 
-/// 导出项目为 JSON（完整数据）或 CSV（摘要）
+/// 导出项目为 JSON（完整数据）或 CSV（摘要），可选包含文件内容
 #[tauri::command]
 pub fn export_project(
+    app: AppHandle,
     db: State<'_, DbConn>,
     project_id: i64,
     format: String,
+    include_files: Option<bool>,
 ) -> Result<String, String> {
     let conn = db.lock().map_err(|e| e.to_string())?;
 
@@ -145,12 +148,59 @@ pub fn export_project(
     let gantt_tasks = load_gantt_tasks(&conn, project_id)?;
     let files = load_project_files(&conn, project_id)?;
 
+    let include_files_content = include_files.unwrap_or(false);
+    let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let files_with_content = if include_files_content && !files.is_empty() {
+        let files_dir = app_data_dir.join("files").join(project_id.to_string());
+        let mut content_list = Vec::new();
+        for f in &files {
+            let file_path = files_dir.join(&f.stored_name);
+            if file_path.exists() {
+                if let Ok(bytes) = std::fs::read(&file_path) {
+                    content_list.push(FileEntryWithContent {
+                        id: f.id,
+                        project_id: f.project_id,
+                        original_name: f.original_name.clone(),
+                        stored_name: f.stored_name.clone(),
+                        size: f.size,
+                        uploaded_at: f.uploaded_at.clone(),
+                        content_base64: Some(STANDARD.encode(&bytes)),
+                    });
+                } else {
+                    content_list.push(FileEntryWithContent {
+                        id: f.id,
+                        project_id: f.project_id,
+                        original_name: f.original_name.clone(),
+                        stored_name: f.stored_name.clone(),
+                        size: f.size,
+                        uploaded_at: f.uploaded_at.clone(),
+                        content_base64: None,
+                    });
+                }
+            } else {
+                content_list.push(FileEntryWithContent {
+                    id: f.id,
+                    project_id: f.project_id,
+                    original_name: f.original_name.clone(),
+                    stored_name: f.stored_name.clone(),
+                    size: f.size,
+                    uploaded_at: f.uploaded_at.clone(),
+                    content_base64: None,
+                });
+            }
+        }
+        Some(content_list)
+    } else {
+        None
+    };
+
     let export = ProjectExport {
-        version: 1,
+        version: 2,
         project,
         kanban_columns,
         gantt_tasks,
         files,
+        files_with_content,
     };
 
     match format.as_str() {
@@ -273,6 +323,7 @@ fn import_full_project_impl(conn: &rusqlite::Connection, export: ProjectExport) 
     conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
 
     let tx_result: Result<crate::db::models::Project, String> = (|| {
+        // 1. INSERT 项目
         conn.execute(
             "INSERT INTO projects (name, description, project_number, project_type, status, start_date, end_date, created_by) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             rusqlite::params![export.project.name, export.project.description, export.project.project_number, export.project.project_type, export.project.status, export.project.start_date, export.project.end_date, export.project.created_by],
@@ -281,25 +332,7 @@ fn import_full_project_impl(conn: &rusqlite::Connection, export: ProjectExport) 
 
         let new_project_id = conn.last_insert_rowid();
 
-        for col in &export.kanban_columns {
-            conn.execute(
-                "INSERT INTO kanban_columns (project_id, title, position, column_type) VALUES (?1, ?2, ?3, ?4)",
-                rusqlite::params![new_project_id, col.title, col.position, col.column_type],
-            )
-            .map_err(|e| e.to_string())?;
-
-            let new_col_id = conn.last_insert_rowid();
-
-            for card in &col.cards {
-                let tags_json = serde_json::to_string(&card.tags).unwrap_or_else(|_| "[]".to_string());
-                conn.execute(
-                    "INSERT INTO kanban_cards (column_id, title, description, position, tags, due_date, gantt_task_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-                    rusqlite::params![new_col_id, card.title, card.description, card.position, tags_json, card.due_date, card.gantt_task_id],
-                )
-                .map_err(|e| e.to_string())?;
-            }
-        }
-
+        // 2. INSERT 甘特任务（先建 map，再处理看板卡片的 gantt_task_id）
         let mut gantt_id_map: HashMap<i64, i64> = HashMap::new();
         for task in &export.gantt_tasks {
             conn.execute(
@@ -312,6 +345,7 @@ fn import_full_project_impl(conn: &rusqlite::Connection, export: ProjectExport) 
             gantt_id_map.insert(task.id, new_task_id);
         }
 
+        // 3. UPDATE 甘特依赖（用新 ID 映射）
         for task in &export.gantt_tasks {
             if !task.dependencies.is_empty() {
                 let new_deps: Vec<i64> = task.dependencies
@@ -326,6 +360,37 @@ fn import_full_project_impl(conn: &rusqlite::Connection, export: ProjectExport) 
                 )
                 .map_err(|e| e.to_string())?;
             }
+        }
+
+        // 4. INSERT 看板列 + 卡片（卡片 gantt_task_id 映射为新 ID）
+        for col in &export.kanban_columns {
+            conn.execute(
+                "INSERT INTO kanban_columns (project_id, title, position, column_type) VALUES (?1, ?2, ?3, ?4)",
+                rusqlite::params![new_project_id, col.title, col.position, col.column_type],
+            )
+            .map_err(|e| e.to_string())?;
+
+            let new_col_id = conn.last_insert_rowid();
+
+            for card in &col.cards {
+                let tags_json = serde_json::to_string(&card.tags).unwrap_or_else(|_| "[]".to_string());
+                let new_gantt_task_id = card.gantt_task_id
+                    .and_then(|old_id| gantt_id_map.get(&old_id).copied());
+                conn.execute(
+                    "INSERT INTO kanban_cards (column_id, title, description, position, tags, due_date, gantt_task_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                    rusqlite::params![new_col_id, card.title, card.description, card.position, tags_json, card.due_date, new_gantt_task_id],
+                )
+                .map_err(|e| e.to_string())?;
+            }
+        }
+
+        // 5. INSERT 文件元数据
+        for file in &export.files {
+            conn.execute(
+                "INSERT INTO project_files (project_id, original_name, stored_name, size, uploaded_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+                rusqlite::params![new_project_id, file.original_name, file.stored_name, file.size, file.uploaded_at],
+            )
+            .map_err(|e| e.to_string())?;
         }
 
         Ok(conn.query_row(
@@ -344,9 +409,13 @@ fn import_full_project_impl(conn: &rusqlite::Connection, export: ProjectExport) 
     tx_result
 }
 
-/// 导出所有项目为 JSON（完整备份）
+/// 导出所有项目为 JSON（完整备份），可选包含文件内容
 #[tauri::command]
-pub fn export_all_projects(db: State<'_, DbConn>) -> Result<String, String> {
+pub fn export_all_projects(
+    app: AppHandle,
+    db: State<'_, DbConn>,
+    include_files: Option<bool>,
+) -> Result<String, String> {
     let conn = db.lock().map_err(|e| e.to_string())?;
 
     let mut stmt = conn
@@ -360,6 +429,9 @@ pub fn export_all_projects(db: State<'_, DbConn>) -> Result<String, String> {
         .map_err(|e| e.to_string())?;
 
     drop(stmt);
+
+    let include_files_content = include_files.unwrap_or(false);
+    let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
 
     let mut exports = Vec::new();
     for pid in project_ids {
@@ -375,29 +447,90 @@ pub fn export_all_projects(db: State<'_, DbConn>) -> Result<String, String> {
         let gantt_tasks = load_gantt_tasks(&conn, pid)?;
         let files = load_project_files(&conn, pid)?;
 
+        let files_with_content = if include_files_content && !files.is_empty() {
+            let files_dir = app_data_dir.join("files").join(pid.to_string());
+            let mut content_list = Vec::new();
+            for f in &files {
+                let file_path = files_dir.join(&f.stored_name);
+                if file_path.exists() {
+                    if let Ok(bytes) = std::fs::read(&file_path) {
+                        content_list.push(FileEntryWithContent {
+                            id: f.id,
+                            project_id: f.project_id,
+                            original_name: f.original_name.clone(),
+                            stored_name: f.stored_name.clone(),
+                            size: f.size,
+                            uploaded_at: f.uploaded_at.clone(),
+                            content_base64: Some(STANDARD.encode(&bytes)),
+                        });
+                    } else {
+                        content_list.push(FileEntryWithContent {
+                            id: f.id,
+                            project_id: f.project_id,
+                            original_name: f.original_name.clone(),
+                            stored_name: f.stored_name.clone(),
+                            size: f.size,
+                            uploaded_at: f.uploaded_at.clone(),
+                            content_base64: None,
+                        });
+                    }
+                } else {
+                    content_list.push(FileEntryWithContent {
+                        id: f.id,
+                        project_id: f.project_id,
+                        original_name: f.original_name.clone(),
+                        stored_name: f.stored_name.clone(),
+                        size: f.size,
+                        uploaded_at: f.uploaded_at.clone(),
+                        content_base64: None,
+                    });
+                }
+            }
+            Some(content_list)
+        } else {
+            None
+        };
+
         exports.push(ProjectExport {
-            version: 1,
+            version: 2,
             project,
             kanban_columns,
             gantt_tasks,
             files,
+            files_with_content,
         });
     }
 
     serde_json::to_string_pretty(&exports).map_err(|e| e.to_string())
 }
 
-/// 从完整备份文件导入多个项目
+/// 从完整备份文件导入多个项目，可选替换现有数据
 #[tauri::command]
-pub fn import_all_projects(app: AppHandle, db: State<'_, DbConn>, file_path: String) -> Result<Vec<crate::db::models::Project>, String> {
+pub fn import_all_projects(app: AppHandle, db: State<'_, DbConn>, file_path: String, replace: Option<bool>) -> Result<Vec<crate::db::models::Project>, String> {
     let content = std::fs::read_to_string(&file_path).map_err(|e| e.to_string())?;
     let exports: Vec<ProjectExport> =
         serde_json::from_str(&content).map_err(|e| format!("无法解析备份文件: {e}"))?;
+
+    let do_replace = replace.unwrap_or(false);
+
+    if do_replace {
+        let conn = db.lock().map_err(|e| e.to_string())?;
+        conn.execute_batch(
+            "DELETE FROM kanban_cards; DELETE FROM kanban_columns; DELETE FROM gantt_tasks; DELETE FROM project_files; DELETE FROM project_status_history; DELETE FROM project_milestones; DELETE FROM projects;"
+        ).map_err(|e| format!("清空数据失败: {e}"))?;
+    }
+
+    let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
 
     let mut imported = Vec::new();
     for export in exports {
         let conn = db.lock().map_err(|e| e.to_string())?;
         let project = import_full_project_impl(&conn, export)?;
+
+        // 如果备份包含文件内容，写入实际文件
+        let _ = app_data_dir; // 用于后续文件内容还原
+        // TODO: 处理 files_with_content 中的 base64 文件内容写入
+
         let _ = app.emit(events::EVENT_PROJECT_UPDATED, project.id);
         imported.push(project);
     }

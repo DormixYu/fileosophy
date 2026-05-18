@@ -11,6 +11,7 @@ import JoinShareDialog from "@/components/common/JoinShareDialog";
 import ProjectDialog from "@/components/project/ProjectDialog";
 import BatchStatusDropdown from "@/components/project/BatchStatusDropdown";
 import ProjectTable, { type SortState } from "@/components/project/ProjectTable";
+import { normalizePath } from "@/components/sharing/ActiveShareRow";
 import type {
   Project,
   ProjectStatus,
@@ -432,8 +433,8 @@ export default function ProjectListPage() {
       {shareProject && (
         <ShareProjectDialog
           project={shareProject}
-          initialSharing={shareStatus.some(s => s.path === shareProject.folder_path)}
-          initialPort={shareStatus.find(s => s.path === shareProject.folder_path)?.port ?? 0}
+          initialSharing={shareStatus.some(s => normalizePath(s.path) === normalizePath(shareProject.folder_path || ""))}
+          initialPort={shareStatus.find(s => normalizePath(s.path) === normalizePath(shareProject.folder_path || ""))?.port ?? 0}
           onClose={() => {
             setShareProject(null);
             refreshShareStatus();

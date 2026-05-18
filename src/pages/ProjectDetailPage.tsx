@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Pencil, Clock, Calendar, FolderOpen } from "lucide-react";
 import { useProjectStore } from "@/stores/useProjectStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
+import { projectApi } from "@/lib/tauri-api";
 import Modal from "@/components/common/Modal";
 import FileExplorer from "@/components/files/FileExplorer";
 import FilePanel from "@/components/files/FilePanel";
@@ -126,6 +127,16 @@ export default function ProjectDetailPage() {
             {tab.label}
           </button>
         ))}
+        {currentProject?.folder_path && (
+          <button
+            className="ml-auto btn btn-outline btn-sm hover-gold-text"
+            onClick={() => projectApi.openFolder(currentProject.folder_path!)}
+            title={currentProject.folder_path}
+          >
+            <FolderOpen size={13} strokeWidth={1.5} />
+            项目文件夹
+          </button>
+        )}
       </div>
 
       {/* 内容区 */}

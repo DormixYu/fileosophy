@@ -77,9 +77,12 @@ export function buildSegments(
   histories: ProjectStatusHistory[],
   dayWidth: number,
   getStatusConfig: (id?: string | null) => ProjectStatusConfig | undefined,
+  minDate?: string,
 ): { color: string; left: number; width: number }[] {
   const startDate = project.start_date;
   if (!startDate) return [];
+
+  const ref = minDate || startDate;
 
   const today = getToday();
   const isCompleted = project.status === "completed" || project.status === "cancelled";
@@ -89,7 +92,7 @@ export function buildSegments(
 
   // 无历史记录 → 整条显示当前状态颜色
   if (histories.length === 0) {
-    return [{ color: defaultColor, left: 0, width: duration * dayWidth }];
+    return [{ color: defaultColor, left: daysBetween(ref, startDate) * dayWidth, width: duration * dayWidth }];
   }
 
   // 按日期排序，提取日期部分，过滤范围外记录
@@ -116,7 +119,7 @@ export function buildSegments(
   for (const entry of merged) {
     if (entry.date > cursor) {
       const config = getStatusConfig(prevStatus);
-      const leftPx = daysBetween(startDate, cursor) * dayWidth;
+      const leftPx = daysBetween(ref, cursor) * dayWidth;
       const widthPx = daysBetween(cursor, entry.date) * dayWidth;
       if (widthPx > 0) {
         segments.push({ color: config?.color || defaultColor, left: leftPx, width: widthPx });
@@ -128,13 +131,13 @@ export function buildSegments(
 
   // 最后一段：从 cursor 到 endDate
   const lastConfig = getStatusConfig(prevStatus);
-  const lastLeftPx = daysBetween(startDate, cursor) * dayWidth;
+  const lastLeftPx = daysBetween(ref, cursor) * dayWidth;
   const lastWidthPx = Math.max(1, daysBetween(cursor, endDate) + 1) * dayWidth;
   segments.push({ color: lastConfig?.color || defaultColor, left: lastLeftPx, width: lastWidthPx });
 
   // 兜底
   if (segments.length === 0) {
-    return [{ color: defaultColor, left: 0, width: duration * dayWidth }];
+    return [{ color: defaultColor, left: daysBetween(ref, startDate) * dayWidth, width: duration * dayWidth }];
   }
 
   return segments;

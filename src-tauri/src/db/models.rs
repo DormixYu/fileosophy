@@ -131,6 +131,21 @@ pub struct ProjectExport {
     pub kanban_columns: Vec<KanbanColumn>,
     pub gantt_tasks: Vec<GanttTask>,
     pub files: Vec<FileEntry>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub files_with_content: Option<Vec<FileEntryWithContent>>,
+}
+
+/// 文件条目（含 base64 内容）
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct FileEntryWithContent {
+    pub id: i64,
+    pub project_id: i64,
+    pub original_name: String,
+    pub stored_name: String,
+    pub size: i64,
+    pub uploaded_at: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content_base64: Option<String>,
 }
 
 /// 项目状态变更历史
