@@ -1,8 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 100" fill="none">
+  <!-- Icon -->
   <path d="M26,8 L64,8 L82,26 L82,92 L26,92 Z" stroke="#f0ece4" stroke-width="1.8" stroke-linejoin="round"/>
   <path d="M64,8 L64,26 L82,26" stroke="#f0ece4" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
   <line x1="36" y1="36" x2="56" y2="36" stroke="#f0ece4" stroke-width="1" opacity="0.25"/>
   <line x1="36" y1="78" x2="54" y2="78" stroke="#f0ece4" stroke-width="1" opacity="0.25"/>
   <line x1="36" y1="86" x2="46" y2="86" stroke="#f0ece4" stroke-width="1" opacity="0.25"/>
   <path d="M34,57 C40,36 52,36 52,53 C52,70 64,70 66,50" stroke="#c9a84c" stroke-width="2.4" stroke-linecap="round"/>
+  <!-- Wordmark -->
+  <text x="120" y="60" font-family="'Cormorant Garamond', Georgia, serif" font-size="32" font-weight="300" fill="#f0ece4" letter-spacing="0.32em">FILEOSOPHY</text>
 </svg>

@@ -291,7 +291,7 @@ export default function GanttChart({ projectId }: Props) {
               <div
                 className="absolute top-0 bottom-0 w-0.5 z-10 pointer-events-none"
                 style={{
-                  left: daysBetween(minDate, today) * DAY_WIDTH,
+                  left: NAME_WIDTH + daysBetween(minDate, today) * DAY_WIDTH,
                   background: "var(--color-danger)",
                   opacity: 0.6,
                 }}
