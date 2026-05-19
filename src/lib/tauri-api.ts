@@ -70,9 +70,6 @@ export const projectApi = {
   openFile: (path: string) => invoke<void>("open_file", { path }),
 
   // 状态变更历史
-  getStatusHistory: (projectId: number) =>
-    invoke<ProjectStatusHistory[]>("get_project_status_history", { projectId }),
-
   getAllStatusHistories: () =>
     invoke<ProjectStatusHistory[]>("get_all_status_histories"),
 
@@ -108,9 +105,6 @@ export const projectApi = {
 
   deleteMilestone: (id: number) =>
     invoke<void>("delete_project_milestone", { id }),
-
-  getMilestones: (projectId: number) =>
-    invoke<ProjectMilestone[]>("get_project_milestones", { projectId }),
 
   getAllMilestones: () =>
     invoke<ProjectMilestone[]>("get_all_milestones"),
@@ -208,8 +202,6 @@ export const fileApi = {
 
   delete: (fileId: number) => invoke<void>("delete_file", { fileId }),
 
-  download: (fileId: number) => invoke<string>("download_file", { fileId }),
-
   openStoredFile: (fileId: number) => invoke<void>("open_stored_file", { fileId }),
 
   preview: (fileId: number) => invoke<FilePreview>("preview_file", { fileId }),
@@ -236,15 +228,6 @@ export const settingsApi = {
 
 export const notificationHistoryApi = {
   getAll: () => invoke<Notification[]>("get_notifications"),
-
-  add: (notif: Omit<Notification, "read" | "created_at">) =>
-    invoke<void>("add_notification", {
-      id: notif.id,
-      type_: notif.type,
-      title: notif.title,
-      message: notif.message,
-      link: notif.link ?? null,
-    }),
 
   markRead: (id: string) => invoke<void>("mark_notification_read", { id }),
 
@@ -276,13 +259,21 @@ export const exportApi = {
   exportAllProjects: (includeFiles?: boolean) =>
     invoke<string>("export_all_projects", { includeFiles: includeFiles ?? null }),
 
-  /** 导入单个项目 */
-  importProject: (filePath: string) =>
-    invoke<Project>("import_project", { filePath }),
-
   /** 从备份文件导入所有项目，可选替换现有数据 */
   importAllProjects: (filePath: string, replace?: boolean) =>
     invoke<Project[]>("import_all_projects", { filePath, replace: replace ?? false }),
+
+  /** 导出项目列表为 CSV 到指定路径 */
+  exportProjectList: (projectIds: number[], fields: string[], savePath: string) =>
+    invoke<void>("export_project_list", { projectIds, fields, savePath }),
+
+  /** 导出项目文件夹为 zip 压缩包 */
+  exportProjectFiles: (projectId: number, savePath: string) =>
+    invoke<number>("export_project_files", { projectId, savePath }),
+
+  /** 从 CSV 文件导入项目列表 */
+  importProjectList: (filePath: string) =>
+    invoke<number>("import_project_list", { filePath }),
 };
 
 // ── 文件夹扫描/导入 ──────────────────────────────────────────
@@ -293,7 +284,7 @@ export const folderApi = {
     invoke<ScannedFolder[]>("scan_project_folders", { parentPath: folderPath }),
 
   /** 从文件夹导入为新项目 */
-  importFromFolder: (folder: ScannedFolder) => {
+  importFromFolder: (folder: ScannedFolder, status?: string, shouldRename?: boolean) => {
     const sep = folder.path.includes("\\") ? "\\" : "/";
     const lastSep = folder.path.lastIndexOf(sep);
     const parentPath = lastSep >= 0 ? folder.path.substring(0, lastSep) : "";
@@ -301,10 +292,11 @@ export const folderApi = {
       parentPath,
       folderName: folder.folder_name,
       name: folder.parsed_name || folder.folder_name,
-      projectNumber: folder.parsed_code || null,
       projectType: folder.inferred_type || null,
       startDate: folder.inferred_date || null,
       endDate: folder.inferred_end_date || null,
+      status: status ?? null,
+      shouldRename: shouldRename ?? null,
     };
     return invoke<Project>("import_project_from_folder", args);
   },
@@ -321,11 +313,6 @@ export const shortcutApi = {
   unregister: (shortcut: string) =>
     import("@tauri-apps/plugin-global-shortcut").then((m) =>
       m.unregister(shortcut)
-    ),
-
-  isRegistered: (shortcut: string) =>
-    import("@tauri-apps/plugin-global-shortcut").then((m) =>
-      m.isRegistered(shortcut)
     ),
 };
 

@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
-import { Plus, Search, Link as LinkIcon, Trash2, X, Calendar } from "lucide-react";
+import { Plus, Search, Link as LinkIcon, Trash2, X, Calendar, ChevronDown } from "lucide-react";
 import { useProjectStore } from "@/stores/useProjectStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 import { useNotificationStore } from "@/stores/useNotificationStore";
@@ -18,14 +18,14 @@ import type {
 } from "@/types";
 
 interface SavedFilters {
-  status: string;
-  type: string;
+  status: string[];
+  type: string[];
   startDate: string;
   endDate: string;
 }
 
 const FILTERS_KEY = "project_filters";
-const DEFAULT_FILTERS: SavedFilters = { status: "", type: "", startDate: "", endDate: "" };
+const DEFAULT_FILTERS: SavedFilters = { status: [], type: [], startDate: "", endDate: "" };
 
 export default function ProjectListPage() {
   const { projects, fetchProjects, createProject, updateProject, deleteProject, loading, consumeCreateProject, pendingCreateProject } =
@@ -59,7 +59,7 @@ export default function ProjectListPage() {
     }).catch((e) => console.error("Failed to persist filters:", e));
   }, []);
 
-  const updateFilter = useCallback((key: keyof SavedFilters, value: string) => {
+  const updateFilter = useCallback((key: keyof SavedFilters, value: string[] | string) => {
     setFilters((prev) => {
       const next = { ...prev, [key]: value };
       persistFilters(next);
@@ -106,13 +106,13 @@ export default function ProjectListPage() {
     }
 
     // 状态筛选
-    if (filters.status) {
-      result = result.filter((p) => p.status === filters.status);
+    if (filters.status.length > 0) {
+      result = result.filter((p) => p.status !== null && filters.status.includes(p.status));
     }
 
     // 分类筛选
-    if (filters.type) {
-      result = result.filter((p) => p.project_type === filters.type);
+    if (filters.type.length > 0) {
+      result = result.filter((p) => p.project_type !== null && filters.type.includes(p.project_type));
     }
 
     // 时间范围筛选
@@ -254,10 +254,12 @@ export default function ProjectListPage() {
       {/* 页头 */}
       <div className="flex items-start justify-between mb-5 shrink-0">
         <div>
-          <h1 className="text-2xl" style={{ color: "var(--text-primary)" }}>
-            项目
-          </h1>
-          <div className="mt-1.5 h-[1px] w-8" style={{ background: "var(--gold)", opacity: 0.6 }} />
+          <div className="flex items-center gap-3">
+            <h1 className="text-title font-serif" style={{ color: "var(--text-primary)" }}>
+              项目
+            </h1>
+            <div className="w-6 h-[2px] rounded-full" style={{ background: "var(--gold)", opacity: 0.6 }} />
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -277,47 +279,45 @@ export default function ProjectListPage() {
       {/* 工具栏 */}
       <div className="flex items-center gap-3 mb-3 shrink-0">
         {/* 搜索 */}
-        <div className="relative flex-1 max-w-xs">
-          <Search
-            size={14}
-            strokeWidth={1.5}
-            className="absolute left-3 top-1/2 -translate-y-1/2"
-            style={{ color: "var(--gold)" }}
-          />
+        <div className="flex items-center gap-1.5 input-base !py-1 !px-2 !text-xs !rounded-md flex-1 max-w-xs">
+          <Search size={12} strokeWidth={1.5} style={{ color: "var(--text-muted)" }} />
           <input
             type="text"
             placeholder="搜索编号、名称…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="input-base w-full pl-9 text-right"
+            className="bg-transparent outline-none w-full"
+            style={{ color: "var(--text-primary)" }}
           />
         </div>
 
         {/* 状态筛选 */}
-        <select
-          value={filters.status}
-          onChange={(e) => updateFilter("status", e.target.value)}
-          className="input-base text-[11px] py-1 pl-2 pr-6"
-          style={{ background: "var(--bg-surface-alt)", minWidth: 70 }}
-        >
-          <option value="">全状态</option>
-          {parsedStatuses.map((s) => (
-            <option key={s.id} value={s.id}>{s.name}</option>
-          ))}
-        </select>
+        <MultiSelect
+          label="状态"
+          selected={filters.status}
+          items={parsedStatuses.map(s => ({ id: s.id, name: s.name, color: s.color }))}
+          onToggle={(id) => {
+            const next = filters.status.includes(id)
+              ? filters.status.filter(v => v !== id)
+              : [...filters.status, id];
+            updateFilter("status", next);
+          }}
+          onClear={() => updateFilter("status", [])}
+        />
 
         {/* 分类筛选 */}
-        <select
-          value={filters.type}
-          onChange={(e) => updateFilter("type", e.target.value)}
-          className="input-base text-[11px] py-1 pl-2 pr-6"
-          style={{ background: "var(--bg-surface-alt)", minWidth: 70 }}
-        >
-          <option value="">全分类</option>
-          {parsedTypes.map((t) => (
-            <option key={t.id} value={t.id}>{t.name}</option>
-          ))}
-        </select>
+        <MultiSelect
+          label="分类"
+          selected={filters.type}
+          items={parsedTypes.map(t => ({ id: t.id, name: t.name }))}
+          onToggle={(id) => {
+            const next = filters.type.includes(id)
+              ? filters.type.filter(v => v !== id)
+              : [...filters.type, id];
+            updateFilter("type", next);
+          }}
+          onClear={() => updateFilter("type", [])}
+        />
 
         {/* 时间范围 */}
         <div className="flex items-center gap-1.5">
@@ -326,14 +326,14 @@ export default function ProjectListPage() {
             value={filters.startDate}
             onChange={(v) => updateFilter("startDate", v)}
             placeholder="起始日期"
-            style={{ background: "var(--bg-surface-alt)", fontSize: "11px", minWidth: 100 }}
+            className="input-base !py-1 !px-2 !text-xs !rounded-md"
           />
           <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>—</span>
           <DatePicker
             value={filters.endDate}
             onChange={(v) => updateFilter("endDate", v)}
+            className="input-base !py-1 !px-2 !text-xs !rounded-md"
             placeholder="截止日期"
-            style={{ background: "var(--bg-surface-alt)", fontSize: "11px", minWidth: 100 }}
           />
           {(filters.startDate || filters.endDate) && (
             <button
@@ -348,7 +348,7 @@ export default function ProjectListPage() {
         </div>
 
         {/* 有筛选条件时显示清除按钮 */}
-        {(filters.status || filters.type || filters.startDate || filters.endDate) && (
+        {(filters.status.length > 0 || filters.type.length > 0 || filters.startDate || filters.endDate) && (
           <button
             className="text-[10px] underline cursor-pointer transition-colors hover-gold-text"
             style={{ color: "var(--text-muted)", background: "none", border: "none" }}
@@ -374,7 +374,7 @@ export default function ProjectListPage() {
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex items-center justify-center h-full text-sm" style={{ color: "var(--text-tertiary)" }}>
-            {search || filters.status || filters.type || filters.startDate || filters.endDate ? "没有匹配的项目" : "还没有项目"}
+            {search || filters.status.length > 0 || filters.type.length > 0 || filters.startDate || filters.endDate ? "没有匹配的项目" : "还没有项目"}
           </div>
         ) : (
           <ProjectTable
@@ -528,6 +528,83 @@ export default function ProjectListPage() {
             确定删除该项目？所有数据将被清除。
           </p>
         </Modal>
+      )}
+    </div>
+  );
+}
+
+// ── 多选下拉 ──────────────────────────────────────────────────────
+
+function MultiSelect({
+  label,
+  selected,
+  items,
+  onToggle,
+  onClear,
+}: {
+  label: string;
+  selected: string[];
+  items: { id: string; name: string; color?: string }[];
+  onToggle: (id: string) => void;
+  onClear: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const count = selected.length;
+
+  return (
+    <div className="relative">
+      <button
+        className="text-xs px-2.5 py-1 rounded-md transition-all hover-gold-border flex items-center gap-1"
+        style={{
+          background: count > 0 ? "var(--gold-glow)" : "var(--bg-surface-alt)",
+          border: "1px solid var(--border-light)",
+          color: count > 0 ? "var(--gold)" : "var(--text-secondary)",
+        }}
+        onClick={() => setOpen(!open)}
+      >
+        {label}{count > 0 ? ` (${count})` : ""}
+        <ChevronDown size={12} strokeWidth={1.5} />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div
+            className="absolute left-0 top-full mt-1 z-50 rounded-lg p-2 min-w-[140px] animate-fade-in"
+            style={{
+              background: "var(--bg-elevated)",
+              border: "1px solid var(--border-default)",
+              boxShadow: "var(--shadow-gold-lg)",
+            }}
+          >
+            {count > 0 && (
+              <button
+                className="w-full text-left px-2 py-1.5 rounded-md text-xs transition-colors hover-gold-bg"
+                style={{ color: "var(--gold)", border: "none", cursor: "pointer" }}
+                onClick={() => { onClear(); setOpen(false); }}
+              >
+                清除筛选
+              </button>
+            )}
+            {items.map((item) => (
+              <label
+                key={item.id}
+                className="flex items-center gap-2 px-2 py-1.5 rounded-md text-xs cursor-pointer transition-colors hover-gold-bg"
+                style={{ color: selected.includes(item.id) ? "var(--gold)" : "var(--text-secondary)" }}
+              >
+                <input
+                  type="checkbox"
+                  checked={selected.includes(item.id)}
+                  onChange={() => onToggle(item.id)}
+                  className="w-3 h-3 accent-[var(--gold)]"
+                />
+                {item.color && (
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: item.color }} />
+                )}
+                {item.name}
+              </label>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );

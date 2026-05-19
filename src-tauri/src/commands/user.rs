@@ -1,8 +1,7 @@
 use crate::db::DbConn;
 use crate::db::models::User;
-use crate::events;
 use std::fs;
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Manager, State};
 
 #[tauri::command]
 pub fn get_current_user(db: State<'_, DbConn>) -> Result<Option<User>, String> {
@@ -42,7 +41,6 @@ pub fn get_current_user(db: State<'_, DbConn>) -> Result<Option<User>, String> {
 
 #[tauri::command]
 pub fn create_or_update_user(
-    app: AppHandle,
     db: State<'_, DbConn>,
     name: String,
     avatar_path: Option<String>,
@@ -80,7 +78,6 @@ pub fn create_or_update_user(
                 },
             ).map_err(|e| e.to_string())?;
 
-            let _ = app.emit(events::EVENT_USER_UPDATED, user.id);
             Ok(user)
         }
         None => {
@@ -113,7 +110,6 @@ pub fn create_or_update_user(
                 },
             ).map_err(|e| e.to_string())?;
 
-            let _ = app.emit(events::EVENT_USER_UPDATED, user.id);
             Ok(user)
         }
     }
@@ -159,7 +155,6 @@ pub fn upload_avatar(
             rusqlite::params![path_str, id],
         )
         .map_err(|e| e.to_string())?;
-        let _ = app.emit(events::EVENT_USER_UPDATED, id);
     }
 
     Ok(path_str)

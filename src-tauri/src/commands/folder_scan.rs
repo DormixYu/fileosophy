@@ -2,7 +2,6 @@ use crate::db::DbConn;
 use super::projects::{row_to_project, PROJECT_COLUMNS, DEFAULT_PROJECT_TYPES_JSON, generate_project_number, get_system_username};
 use crate::commands::utils::get_setting;
 use crate::db::models::ScannedFolder;
-use crate::events;
 use regex::Regex;
 use tauri::{AppHandle, Emitter, State};
 
@@ -179,15 +178,50 @@ pub fn scan_project_folders(db: State<'_, DbConn>, parent_path: String) -> Resul
             // 文件夹内最晚文件修改日期 → 终止日期
             let inferred_end_date = get_folder_latest_date(&path);
             // 从编号前缀反查分类
-            let inferred_type = code.as_ref().and_then(|c| {
+            let inferred_type_from_code = code.as_ref().and_then(|c| {
                 let prefix = c.split('-').next().unwrap_or("");
                 types.iter().find(|t| {
                     t.get("prefix").and_then(|v| v.as_str()) == Some(prefix)
                 }).and_then(|t| t.get("id").and_then(|v| v.as_str()).map(|s| s.to_string()))
             });
 
-            log::info!("[scan] MATCHED: folder={}, code={:?}, name={:?}, type={:?}, date={:?}",
-                folder_name, code, parsed_name, inferred_type, inferred_date);
+            // 关键词推断的分类
+            let inferred_type_from_keywords = types.iter().find_map(|t| {
+                let type_id = t.get("id")?.as_str()?;
+                let keywords = t.get("keywords")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_lowercase())).collect::<Vec<_>>())
+                    .unwrap_or_default();
+                if keywords.iter().any(|kw| folder_name.to_lowercase().contains(kw)) {
+                    Some(type_id.to_string())
+                } else {
+                    None
+                }
+            });
+
+            // 确定最终分类：优先编号前缀推断，其次关键词推断
+            let inferred_type = inferred_type_from_code.clone().or(inferred_type_from_keywords.clone());
+
+            // confidence 和 conflict_reason
+            let mut confidence = "high".to_string();
+            let mut conflict_reason: Option<String> = None;
+            if let (Some(ref code_type), Some(ref kw_type)) = (&inferred_type_from_code, &inferred_type_from_keywords) {
+                if code_type != kw_type {
+                    confidence = "medium".to_string();
+                    conflict_reason = Some("分类推断冲突".to_string());
+                }
+            }
+
+            // inferred_status
+            let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+            let inferred_status = if let Some(ref end_date) = inferred_end_date {
+                if end_date < &today { Some("completed".to_string()) } else { Some("planning".to_string()) }
+            } else {
+                Some("planning".to_string())
+            };
+
+            log::info!("[scan] MATCHED: folder={}, code={:?}, name={:?}, type={:?}, date={:?}, confidence={}, status={:?}",
+                folder_name, code, parsed_name, inferred_type, inferred_date, confidence, inferred_status);
 
             results.push(ScannedFolder {
                 folder_name,
@@ -198,6 +232,9 @@ pub fn scan_project_folders(db: State<'_, DbConn>, parent_path: String) -> Resul
                 inferred_type,
                 inferred_date,
                 inferred_end_date,
+                inferred_status,
+                confidence,
+                conflict_reason,
             });
         } else {
             // ② 关键词匹配
@@ -256,8 +293,28 @@ pub fn scan_project_folders(db: State<'_, DbConn>, parent_path: String) -> Resul
             // 去掉首尾多余符号和空白
             clean_name = clean_name.trim_matches(|c: char| c == '-' || c == '_' || c == '.' || c == ' ').to_string();
 
-            log::info!("[scan] UNMATCHED: folder={}, clean_name={:?}, type={:?}, date={:?}",
-                folder_name, clean_name, inferred_type, inferred_date);
+            // confidence 和 conflict_reason
+            let (confidence, conflict_reason, inferred_status) = if inferred_type.is_some() {
+                // 关键词匹配成功但模板不匹配
+                let conflict_reason = if clean_name.is_empty() {
+                    Some("名称无法识别".to_string())
+                } else {
+                    None
+                };
+                let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+                let inferred_status = if let Some(ref end_date) = inferred_end_date {
+                    if end_date < &today { Some("completed".to_string()) } else { Some("planning".to_string()) }
+                } else {
+                    Some("planning".to_string())
+                };
+                ("medium".to_string(), conflict_reason, inferred_status)
+            } else {
+                // 关键词也不匹配
+                ("low".to_string(), Some("无法自动识别分类和名称".to_string()), Some("planning".to_string()))
+            };
+
+            log::info!("[scan] UNMATCHED: folder={}, clean_name={:?}, type={:?}, date={:?}, confidence={}, status={:?}",
+                folder_name, clean_name, inferred_type, inferred_date, confidence, inferred_status);
 
             results.push(ScannedFolder {
                 folder_name,
@@ -268,6 +325,9 @@ pub fn scan_project_folders(db: State<'_, DbConn>, parent_path: String) -> Resul
                 inferred_type,
                 inferred_date,
                 inferred_end_date,
+                inferred_status,
+                confidence,
+                conflict_reason,
             });
         }
     }
@@ -285,46 +345,143 @@ pub fn import_project_from_folder(
     parent_path: String,
     folder_name: String,
     name: String,
-    project_number: Option<String>,
     project_type: Option<String>,
     start_date: Option<String>,
     end_date: Option<String>,
+    status: Option<String>,
+    should_rename: Option<bool>,
 ) -> Result<crate::db::models::Project, String> {
     let conn = db.lock().map_err(|e| e.to_string())?;
     let p_type = project_type.unwrap_or_default();
+    let p_status = status.unwrap_or_else(|| "planning".to_string());
+    let p_created_by = get_system_username();
     let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
 
-    // 优先使用从文件夹名解析出的编号，否则自动生成
-    let project_number = project_number
-        .filter(|n| !n.is_empty())
-        .unwrap_or_else(|| generate_project_number(&conn, &p_type, &name));
+    let do_rename = should_rename.unwrap_or(false);
+
+    // 生成项目编号
+    let project_number = if do_rename {
+        // should_rename=true 时：从 start_date 提取 YYMMDD，查同类型同日期项目数生成 sequence
+        let prefix: String = if !p_type.is_empty() {
+            let types_json = get_setting(&conn, "project_types")
+                .unwrap_or_else(|| DEFAULT_PROJECT_TYPES_JSON.to_string());
+            serde_json::from_str::<Vec<serde_json::Value>>(&types_json)
+                .unwrap_or_default()
+                .iter()
+                .find(|t| t.get("id").and_then(|v| v.as_str()) == Some(&p_type))
+                .and_then(|t| t.get("prefix").and_then(|v| v.as_str()))
+                .unwrap_or("PRJ")
+                .to_string()
+        } else {
+            "PRJ".to_string()
+        };
+
+        let date_str = if let Some(ref sd) = start_date {
+            // 从 start_date "YYYY-MM-DD" 提取 YYMMDD
+            sd.replace("-", "")
+                .chars()
+                .skip(2) // skip first 2 chars of year (e.g. "20" from "2026")
+                .take(6)
+                .collect::<String>()
+        } else {
+            chrono::Local::now().format("%y%m%d").to_string()
+        };
+
+        let safe_prefix = prefix.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+        let pattern = format!("{}-{}%", safe_prefix, date_str);
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM projects WHERE project_number LIKE ?1 ESCAPE '\\'",
+                [&pattern],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+        let sequence = format!("{:02}", count + 1);
+
+        format!("{}-{}-{}", prefix, date_str, sequence)
+    } else {
+        generate_project_number(&conn, &p_type, &name)
+    };
+
     let full_path = std::path::Path::new(&parent_path).join(&folder_name);
-    let folder_path = full_path.to_string_lossy().to_string();
+    let mut folder_path = full_path.to_string_lossy().to_string();
 
-    log::info!("[import] name={}, project_number={}, p_type={}, start_date={:?}, end_date={:?}, folder_path={}",
-        name, project_number, p_type, start_date, end_date, folder_path);
+    conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
 
-    conn.execute(
-        "INSERT INTO projects (name, description, project_number, project_type, status, start_date, end_date, status_changed_at, created_by, folder_path)
-         VALUES (?1, '', ?2, ?3, 'planning', ?4, ?5, ?6, ?7, ?8)",
-        rusqlite::params![name, project_number, p_type, start_date, end_date, now, get_system_username(), folder_path],
-    )
-    .map_err(|e| e.to_string())?;
+    let tx_result: Result<crate::db::models::Project, String> = (|| {
+        conn.execute(
+            "INSERT INTO projects (name, description, project_number, project_type, status, start_date, end_date, status_changed_at, created_by, folder_path)
+             VALUES (?1, '', ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            rusqlite::params![name, project_number, p_type, p_status, start_date, end_date, now, p_created_by, folder_path],
+        )
+        .map_err(|e| e.to_string())?;
 
-    let id = conn.last_insert_rowid();
-    log::info!("[import] Inserted project id={}", id);
+        let id = conn.last_insert_rowid();
 
-    conn.query_row(
-        &format!("SELECT {PROJECT_COLUMNS} FROM projects WHERE id = ?1"),
-        [id],
-        row_to_project,
-    )
-    .map_err(|e| e.to_string())
-    .inspect(|project| {
-        log::info!("[import] Returned project: id={}, number={:?}, name={}, type={:?}, date={:?}, folder={:?}",
-            project.id, project.project_number, project.name, project.project_type, project.start_date, project.folder_path);
-        let _ = app.emit(events::EVENT_PROJECT_UPDATED, project.id);
-    })
+        // 自动创建看板默认列：待办事项 + 已完成事项
+        conn.execute(
+            "INSERT INTO kanban_columns (project_id, title, position, column_type) VALUES (?1, '待办事项', 0, 'todo_pending')",
+            rusqlite::params![id],
+        ).map_err(|e| e.to_string())?;
+        conn.execute(
+            "INSERT INTO kanban_columns (project_id, title, position, column_type) VALUES (?1, '已完成事项', 1, 'todo_done')",
+            rusqlite::params![id],
+        ).map_err(|e| e.to_string())?;
+
+        Ok(conn.query_row(
+            &format!("SELECT {PROJECT_COLUMNS} FROM projects WHERE id = ?1"),
+            [id],
+            row_to_project,
+        ).map_err(|e| e.to_string())?)
+    })();
+
+    if tx_result.is_ok() {
+        conn.execute_batch("COMMIT").map_err(|e| e.to_string())?;
+    } else {
+        conn.execute_batch("ROLLBACK").ok();
+    }
+
+    let project = tx_result?;
+
+    // should_rename=true 时，重命名文件夹
+    if do_rename {
+        let template = get_setting(&conn, "folder_template")
+            .unwrap_or_else(|| "[{code}] {name}".to_string());
+        let code_for_rename = &project_number;
+        let new_folder_name = template
+            .replace("{code}", code_for_rename)
+            .replace("{name}", &name);
+        let new_path = std::path::Path::new(&parent_path).join(&new_folder_name);
+
+        if let Err(e) = std::fs::rename(&full_path, &new_path) {
+            log::warn!("[import] 重命名文件夹失败: {e}, 保留原路径");
+        } else {
+            let new_folder_path = new_path.to_string_lossy().to_string();
+            conn.execute(
+                "UPDATE projects SET folder_path = ?1 WHERE id = ?2",
+                rusqlite::params![new_folder_path, project.id],
+            ).map_err(|e| {
+                log::warn!("[import] 更新 folder_path 失败: {e}");
+                e.to_string()
+            })?;
+            // 更新返回的项目对象的 folder_path
+            folder_path = new_folder_path;
+        }
+    }
+
+    // 导入成功后 emit 事件
+    let _ = app.emit("project-updated", &project);
+
+    // 如果 rename 成功并更新了 folder_path，重新查询返回最新数据
+    if do_rename && folder_path != full_path.to_string_lossy().to_string() {
+        conn.query_row(
+            &format!("SELECT {PROJECT_COLUMNS} FROM projects WHERE id = ?1"),
+            [project.id],
+            row_to_project,
+        ).map_err(|e| e.to_string())
+    } else {
+        Ok(project)
+    }
 }
 
 #[cfg(test)]

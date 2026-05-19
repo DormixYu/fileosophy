@@ -34,7 +34,7 @@ import StatusHistoryModal from "@/components/gantt/StatusHistoryModal";
 export default function GanttPage() {
   const navigate = useNavigate();
   const { projects, fetchProjects, loading } = useProjectStore();
-  const { parsedStatuses } = useSettingsStore();
+  const { parsedStatuses, parsedTypes } = useSettingsStore();
   const containerRef = useRef<HTMLDivElement>(null);
 
   const [dayWidth, setDayWidth] = useState(VIEW_BASE.day);
@@ -103,14 +103,8 @@ export default function GanttPage() {
   // 从完整配置提取可用状态（而非仅从 projects 中已有的）
   const availableStatuses = useMemo(() => parsedStatuses.map((s) => s.id), [parsedStatuses]);
 
-  // 可用分类列表
-  const availableTypes = useMemo(() => {
-    const seen = new Set<string>();
-    for (const p of projects) {
-      if (p.project_type) seen.add(p.project_type);
-    }
-    return [...seen];
-  }, [projects]);
+  // 可用分类列表（从配置中提取，而非仅从已有项目）
+  const availableTypes = useMemo(() => parsedTypes.map((t) => t.id), [parsedTypes]);
 
   // 筛选后的项目
   const filteredProjects = useMemo(() => {
@@ -255,7 +249,7 @@ export default function GanttPage() {
           <h1 className="text-title font-serif" style={{ color: "var(--text-primary)" }}>
             全局甘特图
           </h1>
-          <span className="w-8 h-px" style={{ background: "var(--gold)" }} />
+          <div className="w-6 h-[2px] rounded-full" style={{ background: "var(--gold)", opacity: 0.6 }} />
         </div>
         <span className="text-xs" style={{ color: "var(--text-muted)" }}>
           {filteredProjects.length} 个项目
@@ -318,7 +312,7 @@ export default function GanttPage() {
             <Dropdown
               items={availableTypes}
               selected={typeFilter}
-              getLabel={(v) => v}
+              getLabel={(v) => parsedTypes.find(t => t.id === v)?.name || v}
               onToggle={(v) => toggleFilter(typeFilter, setTypeFilter, v)}
               onClose={() => setShowTypeDropdown(false)}
             />

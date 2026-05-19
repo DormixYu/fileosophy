@@ -1,6 +1,6 @@
 [package]
 name = "fileosophy"
-version = "1.0.0"
+version = "1.0.1"
 description = "Fileosophy - Desktop Project Management"
 edition = "2021"
 
@@ -32,3 +32,4 @@ socket2 = { version = "0.5", features = ["all"] }
 sha2 = "0.10"
 rand = "0.8"
 image = "0.25"
+zip = "2"

@@ -155,9 +155,11 @@ pub fn run() {
             commands::settings::update_app_settings,
             // 项目导入导出
             commands::export::export_project,
-            commands::export::import_project,
             commands::export::export_all_projects,
             commands::export::import_all_projects,
+            commands::export::export_project_list,
+            commands::export::export_project_files,
+            commands::export::import_project_list,
             // 全局搜索
             commands::search::global_search,
             // 通知管理

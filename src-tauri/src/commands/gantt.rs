@@ -1,7 +1,6 @@
 use crate::db::DbConn;
 use crate::db::models::GanttTask;
-use crate::events;
-use tauri::{AppHandle, Emitter, State};
+use tauri::State;
 
 #[tauri::command]
 pub fn get_gantt_data(db: State<'_, DbConn>, project_id: i64) -> Result<Vec<GanttTask>, String> {
@@ -39,7 +38,6 @@ pub fn get_gantt_data(db: State<'_, DbConn>, project_id: i64) -> Result<Vec<Gant
 
 #[tauri::command]
 pub fn add_gantt_task(
-    app: AppHandle,
     db: State<'_, DbConn>,
     project_id: i64,
     name: String,
@@ -80,14 +78,10 @@ pub fn add_gantt_task(
         },
     )
     .map_err(|e| e.to_string())
-    .inspect(|_| {
-        let _ = app.emit(events::EVENT_PROJECT_UPDATED, project_id);
-    })
 }
 
 #[tauri::command]
 pub fn update_gantt_task(
-    app: AppHandle,
     db: State<'_, DbConn>,
     id: i64,
     name: Option<String>,
@@ -162,28 +156,14 @@ pub fn update_gantt_task(
         },
     )
     .map_err(|e| e.to_string())
-    .inspect(|task| {
-        let _ = app.emit(events::EVENT_PROJECT_UPDATED, task.project_id);
-    })
 }
 
 #[tauri::command]
-pub fn delete_gantt_task(app: AppHandle, db: State<'_, DbConn>, id: i64) -> Result<(), String> {
+pub fn delete_gantt_task(db: State<'_, DbConn>, id: i64) -> Result<(), String> {
     let conn = db.lock().map_err(|e| e.to_string())?;
-
-    // 先获取 project_id 用于事件通知
-    let project_id: i64 = conn
-        .query_row(
-            "SELECT project_id FROM gantt_tasks WHERE id = ?1",
-            [id],
-            |row| row.get(0),
-        )
-        .map_err(|e| e.to_string())?;
 
     conn.execute("DELETE FROM gantt_tasks WHERE id = ?1", [id])
         .map_err(|e| e.to_string())?;
-
-    let _ = app.emit(events::EVENT_PROJECT_UPDATED, project_id);
 
     Ok(())
 }

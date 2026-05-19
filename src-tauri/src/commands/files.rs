@@ -112,7 +112,6 @@ pub fn upload_file_to_project(
         .map_err(|e| e.to_string())?;
 
     // 通知前端文件已上传
-    let _ = app.emit(events::EVENT_PROJECT_UPDATED, project_id);
     events::emit_notification(&app, "success", "文件已上传", &entry.original_name, Some(&format!("/project/{}", project_id)));
 
     Ok(entry)
@@ -144,7 +143,6 @@ pub fn delete_file(app: AppHandle, db: State<'_, DbConn>, file_id: i64) -> Resul
         let _ = fs::remove_file(&file_path); // 磁盘文件删除失败不影响结果
     }
 
-    let _ = app.emit(events::EVENT_PROJECT_UPDATED, project_id);
     events::emit_notification(&app, "warning", "文件已删除", &original_name, None);
 
     Ok(())

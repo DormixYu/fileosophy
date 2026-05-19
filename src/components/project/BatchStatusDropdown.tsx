@@ -32,17 +32,17 @@ export default function BatchStatusDropdown({
       </button>
       {open && (
         <div
-          className="absolute z-50 right-0 top-full mt-1 min-w-[140px] py-1 rounded-lg animate-scale-in"
+          className="absolute z-50 right-0 top-full mt-1 min-w-[140px] p-2 rounded-lg animate-scale-in"
           style={{
             background: "var(--bg-elevated)",
-            border: "1px solid var(--border-default)",
-            boxShadow: "var(--shadow-gold)",
+            border: "1px solid var(--border-light)",
+            boxShadow: "var(--shadow-gold-lg)",
           }}
         >
           {statuses.map((s) => (
             <button
               key={s.id}
-              className="w-full text-left px-3 py-1.5 text-xs transition-colors flex items-center gap-2 hover-gold-bg"
+              className="w-full text-left px-2 py-1.5 rounded-md text-xs transition-colors flex items-center gap-2 hover-gold-bg"
               style={{
                 color: "var(--text-secondary)",
                 cursor: "pointer",
