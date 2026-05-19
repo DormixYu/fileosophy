@@ -6,11 +6,11 @@ use crate::events;
 
 /// 与前端 DEFAULT_PROJECT_TYPES 一致的默认分类 JSON
 pub const DEFAULT_PROJECT_TYPES_JSON: &str = "[\
-  {\"id\":\"rd\",\"name\":\"研发\",\"prefix\":\"RD\",\"keywords\":[\"研发\",\"开发\",\"研发项目\",\"RD\"]},\
-  {\"id\":\"design\",\"name\":\"设计\",\"prefix\":\"DS\",\"keywords\":[\"设计\",\"UI\",\"UX\",\"DS\"]},\
-  {\"id\":\"ops\",\"name\":\"运营\",\"prefix\":\"OP\",\"keywords\":[\"运营\",\"推广\",\"活动\",\"OP\"]},\
-  {\"id\":\"construction\",\"name\":\"施工\",\"prefix\":\"CS\",\"keywords\":[\"施工\",\"工程\",\"建设\",\"CS\"]},\
-  {\"id\":\"other\",\"name\":\"其他\",\"prefix\":\"OT\",\"keywords\":[\"其他\",\"杂项\",\"OT\"]}\
+  {\"id\":\"tb\",\"name\":\"投标\",\"prefix\":\"TB\",\"keywords\":[\"标书\",\"响应文件\",\"响应函\",\"报价函\",\"投标\",\"招标\",\"招投标\"]},\
+  {\"id\":\"pj\",\"name\":\"项目\",\"prefix\":\"PJ\",\"keywords\":[\"XM\",\"项目\"]},\
+  {\"id\":\"xz\",\"name\":\"行政\",\"prefix\":\"XZ\",\"keywords\":[\"BX\",\"报销\",\"发票\"]},\
+  {\"id\":\"st\",\"name\":\"学习\",\"prefix\":\"ST\",\"keywords\":[\"学习\",\"初会\",\"注会\",\"CPA\"]},\
+  {\"id\":\"qt\",\"name\":\"其他\",\"prefix\":\"QT\",\"keywords\":[\"杂\"]}\
 ]";
 
 /// 从 settings 表读取文件夹模板，生成项目文件夹名

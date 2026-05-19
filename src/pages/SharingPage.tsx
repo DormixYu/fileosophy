@@ -33,7 +33,7 @@ export default function SharingPage() {
     <div className="h-full flex flex-col animate-slide-up">
       {/* 页头 */}
       <div
-        className="shrink-0 px-6 flex items-center gap-6 border-b py-4"
+        className="shrink-0 px-6 flex items-center gap-6 border-b h-14"
         style={{
           background: "var(--bg-surface)",
           borderColor: "var(--border-light)",
@@ -41,11 +41,11 @@ export default function SharingPage() {
       >
         {/* 页面标题 + 鎏金装饰线 */}
         <div className="flex items-center gap-3">
-          <h1 className="text-headline font-serif" style={{ color: "var(--text-primary)" }}>
+          <h1 className="text-title font-serif" style={{ color: "var(--text-primary)" }}>
             局域网共享
           </h1>
           <div
-            className="w-12 h-[2px] rounded-full"
+            className="w-6 h-[2px] rounded-full"
             style={{ background: "var(--gold)", opacity: 0.6 }}
           />
         </div>
@@ -77,8 +77,12 @@ export default function SharingPage() {
       </div>
 
       {/* 内容区 */}
-      <div className="flex-1 overflow-auto px-8 py-6">
-        {activeTab === "my-shares" && <MyShares />}
+      <div className="flex-1 overflow-hidden px-8 py-6">
+        {activeTab === "my-shares" && (
+          <div className="h-full overflow-y-auto">
+            <MyShares />
+          </div>
+        )}
         {activeTab === "connect" && <ConnectShare onSwitchToMyShares={() => setActiveTab("my-shares")} />}
       </div>
     </div>

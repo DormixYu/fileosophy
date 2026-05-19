@@ -17,26 +17,21 @@ function formatDateCN(dateStr: string): string {
 export default function DatePicker({ value, onChange, placeholder = "选择日期", className, style }: DatePickerProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const handleClick = () => {
-    inputRef.current?.showPicker();
-  };
-
   const defaultStyle: React.CSSProperties = {
     background: "var(--bg-surface)",
-    border: "1px solid var(--border-default)",
+    border: "1px solid var(--border-light)",
+    padding: "4px 8px",
     color: value ? "var(--text-primary)" : "var(--text-muted)",
+    borderRadius: "6px",
   };
 
   return (
     <div
-      className={`relative cursor-pointer ${className || ""}`}
-      style={{ ...defaultStyle, ...style, borderRadius: "6px" }}
-      onClick={handleClick}
+      className={`relative cursor-pointer text-xs select-none ${className || ""}`}
+      style={{ ...defaultStyle, ...style }}
+      onClick={() => inputRef.current?.showPicker()}
     >
-      {/* 可见的格式化文本 */}
-      <div className="px-3 py-1.5 text-sm select-none" style={{ color: value ? "var(--text-primary)" : "var(--text-muted)" }}>
-        {value ? formatDateCN(value) : placeholder}
-      </div>
+      {value ? formatDateCN(value) : placeholder}
 
       {/* 不可见的原生 date input，仅用于选择器弹窗 */}
       <input

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   Info,
@@ -59,9 +59,9 @@ export default function SettingsPage() {
     }
   };
 
-  const handleDirtyChange = (tab: TabKey, dirty: boolean) => {
-    setDirtyTabs((prev) => ({ ...prev, [tab]: dirty }));
-  };
+  const handleDirtyChange = useCallback((tab: TabKey, dirty: boolean) => {
+    setDirtyTabs((prev) => prev[tab] === dirty ? prev : { ...prev, [tab]: dirty });
+  }, []);
 
   useEffect(() => {
     fetchShortcuts();
@@ -72,13 +72,13 @@ export default function SettingsPage() {
       {/* 页面标题 + 鎏金装饰线 */}
       <div className="flex items-center gap-3 mb-6">
         <h1
-          className="text-headline font-serif"
+          className="text-title font-serif"
           style={{ color: "var(--text-primary)" }}
         >
           设置
         </h1>
         <div
-          className="w-12 h-[2px] rounded-full"
+          className="w-6 h-[2px] rounded-full"
           style={{ background: "var(--gold)", opacity: 0.6 }}
         />
       </div>

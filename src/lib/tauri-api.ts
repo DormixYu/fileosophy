@@ -262,6 +262,18 @@ export const exportApi = {
   /** 从备份文件导入所有项目，可选替换现有数据 */
   importAllProjects: (filePath: string, replace?: boolean) =>
     invoke<Project[]>("import_all_projects", { filePath, replace: replace ?? false }),
+
+  /** 导出项目列表为 CSV 到指定路径 */
+  exportProjectList: (projectIds: number[], fields: string[], savePath: string) =>
+    invoke<void>("export_project_list", { projectIds, fields, savePath }),
+
+  /** 导出项目文件夹为 zip 压缩包 */
+  exportProjectFiles: (projectId: number, savePath: string) =>
+    invoke<number>("export_project_files", { projectId, savePath }),
+
+  /** 从 CSV 文件导入项目列表 */
+  importProjectList: (filePath: string) =>
+    invoke<number>("import_project_list", { filePath }),
 };
 
 // ── 文件夹扫描/导入 ──────────────────────────────────────────
@@ -272,7 +284,7 @@ export const folderApi = {
     invoke<ScannedFolder[]>("scan_project_folders", { parentPath: folderPath }),
 
   /** 从文件夹导入为新项目 */
-  importFromFolder: (folder: ScannedFolder) => {
+  importFromFolder: (folder: ScannedFolder, status?: string, shouldRename?: boolean) => {
     const sep = folder.path.includes("\\") ? "\\" : "/";
     const lastSep = folder.path.lastIndexOf(sep);
     const parentPath = lastSep >= 0 ? folder.path.substring(0, lastSep) : "";
@@ -280,10 +292,11 @@ export const folderApi = {
       parentPath,
       folderName: folder.folder_name,
       name: folder.parsed_name || folder.folder_name,
-      projectNumber: folder.parsed_code || null,
       projectType: folder.inferred_type || null,
       startDate: folder.inferred_date || null,
       endDate: folder.inferred_end_date || null,
+      status: status ?? null,
+      shouldRename: shouldRename ?? null,
     };
     return invoke<Project>("import_project_from_folder", args);
   },

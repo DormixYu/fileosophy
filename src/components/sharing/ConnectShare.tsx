@@ -43,10 +43,10 @@ export default function ConnectShare({ onSwitchToMyShares }: Props) {
   };
 
   return (
-    <div className="animate-slide-up flex gap-6">
+    <div className="h-full flex gap-6">
       {/* 左侧：局域网实例 */}
-      <div className="flex-1 min-w-0">
-        <div className="card p-5">
+      <div className="flex-1 min-w-0 flex flex-col">
+        <div className="card p-5 flex-1 overflow-y-auto">
           <div className="flex items-center gap-3 mb-1">
             <Wifi size={14} strokeWidth={1.5} style={{ color: "var(--gold)" }} />
             <h3 className="font-serif text-base" style={{ color: "var(--text-primary)" }}>
@@ -97,8 +97,8 @@ export default function ConnectShare({ onSwitchToMyShares }: Props) {
       </div>
 
       {/* 右侧：手动连接 */}
-      <div className="flex-1 min-w-0">
-        <div className="card p-5">
+      <div className="flex-1 min-w-0 flex flex-col">
+        <div className="card p-5 flex-1 overflow-y-auto">
           <div className="flex items-center gap-3 mb-1">
             <Link size={14} strokeWidth={1.5} style={{ color: "var(--gold)" }} />
             <h3 className="font-serif text-base" style={{ color: "var(--text-primary)" }}>

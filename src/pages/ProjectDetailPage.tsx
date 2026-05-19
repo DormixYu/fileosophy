@@ -82,13 +82,14 @@ export default function ProjectDetailPage() {
         >
           <ArrowLeft size={16} strokeWidth={1.5} />
         </button>
-        <div className="flex-1 min-w-0 flex items-center gap-2">
+        <div className="flex-1 min-w-0 flex items-center gap-3">
           <h1
-            className="text-headline font-serif truncate"
+            className="text-title font-serif truncate"
             style={{ color: "var(--text-primary)" }}
           >
             {currentProject.name}
           </h1>
+          <div className="w-6 h-[2px] rounded-full shrink-0" style={{ background: "var(--gold)", opacity: 0.6 }} />
           <button
             className="p-1 rounded-md transition-colors flex-shrink-0 hover-gold-bg"
             style={{ color: "var(--text-secondary)" }}

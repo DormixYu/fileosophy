@@ -188,4 +188,9 @@ pub struct ScannedFolder {
     pub inferred_type: Option<String>,
     pub inferred_date: Option<String>,
     pub inferred_end_date: Option<String>,
+    #[serde(default)]
+    pub inferred_status: Option<String>,
+    pub confidence: String,       // "high" / "medium" / "low"
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub conflict_reason: Option<String>,
 }
