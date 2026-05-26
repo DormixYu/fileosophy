@@ -80,7 +80,7 @@ export default function MarkdownPreview({ content }: Props) {
                   style={{
                     background: "var(--bg-elevated)",
                     border: "1px solid var(--border-default)",
-                    fontFamily: '"DM Mono", monospace',
+                    fontFamily: '"PingFang SC", sans-serif',
                     color: "var(--text-secondary)",
                   }}
                 >
@@ -94,7 +94,7 @@ export default function MarkdownPreview({ content }: Props) {
                 style={{
                   background: "var(--bg-elevated)",
                   border: "1px solid var(--border-default)",
-                  fontFamily: '"DM Mono", monospace',
+                  fontFamily: '"PingFang SC", sans-serif',
                 }}
               >
                 {children}
@@ -160,13 +160,20 @@ export default function MarkdownPreview({ content }: Props) {
               style={{ borderColor: "var(--border-default)" }}
             />
           ),
-          img: ({ src, alt }) => (
-            <img
-              src={src}
-              alt={alt}
-              className="max-w-full rounded-md my-2"
-            />
-          ),
+          img: ({ src, alt }) => {
+            // 安全过滤：仅允许 asset:、data:、本地路径（不以 http/https 开头）
+            const isSafe = src && !/^https?:\/\//i.test(src);
+            if (!isSafe) {
+              return <span className="text-xs italic" style={{ color: "var(--text-muted)" }}>[外部图片已屏蔽]</span>;
+            }
+            return (
+              <img
+                src={src}
+                alt={alt}
+                className="max-w-full rounded-md my-2"
+              />
+            );
+          },
         }}
       >
         {content}

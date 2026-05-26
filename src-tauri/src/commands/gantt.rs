@@ -1,6 +1,23 @@
 use crate::db::DbConn;
 use crate::db::models::GanttTask;
-use tauri::State;
+use crate::events;
+use tauri::{AppHandle, Emitter, State};
+
+/// 从数据库行构造 GanttTask（解析 dependencies JSON）
+pub fn row_to_gantt_task(row: &rusqlite::Row) -> rusqlite::Result<GanttTask> {
+    let deps_str: String = row.get(5)?;
+    let deps: Vec<i64> = serde_json::from_str(&deps_str).unwrap_or_default();
+    Ok(GanttTask {
+        id: row.get(0)?,
+        project_id: row.get(1)?,
+        name: row.get(2)?,
+        start_date: row.get(3)?,
+        duration_days: row.get(4)?,
+        dependencies: deps,
+        progress: row.get(6)?,
+        created_at: row.get(7)?,
+    })
+}
 
 #[tauri::command]
 pub fn get_gantt_data(db: State<'_, DbConn>, project_id: i64) -> Result<Vec<GanttTask>, String> {
@@ -13,20 +30,7 @@ pub fn get_gantt_data(db: State<'_, DbConn>, project_id: i64) -> Result<Vec<Gant
         .map_err(|e| e.to_string())?;
 
     let rows = stmt
-        .query_map([project_id], |row| {
-            let deps_str: String = row.get(5)?;
-            let deps: Vec<i64> = serde_json::from_str(&deps_str).unwrap_or_default();
-            Ok(GanttTask {
-                id: row.get(0)?,
-                project_id: row.get(1)?,
-                name: row.get(2)?,
-                start_date: row.get(3)?,
-                duration_days: row.get(4)?,
-                dependencies: deps,
-                progress: row.get(6)?,
-                created_at: row.get(7)?,
-            })
-        })
+        .query_map([project_id], row_to_gantt_task)
         .map_err(|e| e.to_string())?;
 
     let mut tasks = Vec::new();
@@ -38,6 +42,7 @@ pub fn get_gantt_data(db: State<'_, DbConn>, project_id: i64) -> Result<Vec<Gant
 
 #[tauri::command]
 pub fn add_gantt_task(
+    app: AppHandle,
     db: State<'_, DbConn>,
     project_id: i64,
     name: String,
@@ -58,30 +63,23 @@ pub fn add_gantt_task(
 
     let id = conn.last_insert_rowid();
 
-    conn.query_row(
+    let task = conn.query_row(
         "SELECT id, project_id, name, start_date, duration_days, dependencies, progress, created_at
          FROM gantt_tasks WHERE id = ?1",
         [id],
-        |row| {
-            let deps_str: String = row.get(5)?;
-            let deps: Vec<i64> = serde_json::from_str(&deps_str).unwrap_or_default();
-            Ok(GanttTask {
-                id: row.get(0)?,
-                project_id: row.get(1)?,
-                name: row.get(2)?,
-                start_date: row.get(3)?,
-                duration_days: row.get(4)?,
-                dependencies: deps,
-                progress: row.get(6)?,
-                created_at: row.get(7)?,
-            })
-        },
+        row_to_gantt_task,
     )
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string())?;
+
+    drop(conn);
+    let _ = app.emit(events::EVENT_PROJECT_UPDATED, serde_json::json!({ "project_id": project_id }));
+
+    Ok(task)
 }
 
 #[tauri::command]
 pub fn update_gantt_task(
+    app: AppHandle,
     db: State<'_, DbConn>,
     id: i64,
     name: Option<String>,
@@ -136,34 +134,37 @@ pub fn update_gantt_task(
             .map_err(|e| e.to_string())?;
     }
 
-    conn.query_row(
+    let task = conn.query_row(
         "SELECT id, project_id, name, start_date, duration_days, dependencies, progress, created_at
          FROM gantt_tasks WHERE id = ?1",
         [id],
-        |row| {
-            let deps_str: String = row.get(5)?;
-            let deps: Vec<i64> = serde_json::from_str(&deps_str).unwrap_or_default();
-            Ok(GanttTask {
-                id: row.get(0)?,
-                project_id: row.get(1)?,
-                name: row.get(2)?,
-                start_date: row.get(3)?,
-                duration_days: row.get(4)?,
-                dependencies: deps,
-                progress: row.get(6)?,
-                created_at: row.get(7)?,
-            })
-        },
+        row_to_gantt_task,
     )
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string())?;
+
+    drop(conn);
+    let _ = app.emit(events::EVENT_PROJECT_UPDATED, serde_json::json!({ "project_id": task.project_id }));
+
+    Ok(task)
 }
 
 #[tauri::command]
-pub fn delete_gantt_task(db: State<'_, DbConn>, id: i64) -> Result<(), String> {
+pub fn delete_gantt_task(app: AppHandle, db: State<'_, DbConn>, id: i64) -> Result<(), String> {
     let conn = db.lock().map_err(|e| e.to_string())?;
+
+    let project_id: Option<i64> = conn.query_row(
+        "SELECT project_id FROM gantt_tasks WHERE id = ?1",
+        [id],
+        |row| row.get(0),
+    ).ok();
 
     conn.execute("DELETE FROM gantt_tasks WHERE id = ?1", [id])
         .map_err(|e| e.to_string())?;
+
+    drop(conn);
+    if let Some(pid) = project_id {
+        let _ = app.emit(events::EVENT_PROJECT_UPDATED, serde_json::json!({ "project_id": pid }));
+    }
 
     Ok(())
 }

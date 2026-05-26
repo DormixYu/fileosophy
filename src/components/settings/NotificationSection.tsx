@@ -3,6 +3,7 @@ import { Save, RotateCcw } from "lucide-react";
 import { useNotificationStore } from "@/stores/useNotificationStore";
 import type { NotificationPreferences } from "@/types";
 import { DEFAULT_NOTIFICATION_PREFERENCES } from "@/types";
+import { ConfirmDialog } from "@/components/common/Modal";
 
 const PREF_LABELS: Record<keyof NotificationPreferences, { label: string; desc: string }> = {
   project_created: { label: "项目创建", desc: "新建项目时通知" },
@@ -18,10 +19,10 @@ const PREF_LABELS: Record<keyof NotificationPreferences, { label: string; desc: 
 };
 
 export default function NotificationSection({ onDirtyChange }: { onDirtyChange?: (dirty: boolean) => void }) {
-  const { preferences, fetchPreferences, savePreferences } = useNotificationStore();
-  const { addToast } = useNotificationStore();
+  const { preferences, fetchPreferences, savePreferences, addToast } = useNotificationStore();
   const [localPrefs, setLocalPrefs] = useState<NotificationPreferences>(DEFAULT_NOTIFICATION_PREFERENCES);
   const [dirty, setDirty] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
 
   useEffect(() => {
     fetchPreferences();
@@ -47,23 +48,25 @@ export default function NotificationSection({ onDirtyChange }: { onDirtyChange?:
   };
 
   const handleReset = () => {
+    setConfirmReset(true);
+  };
+
+  const confirmResetPrefs = () => {
     setLocalPrefs(DEFAULT_NOTIFICATION_PREFERENCES);
     setDirty(true);
+    setConfirmReset(false);
   };
 
   const prefKeys = Object.keys(PREF_LABELS) as (keyof NotificationPreferences)[];
 
   return (
+    <>
     <section className="animate-slide-up">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <h2 className="text-title font-serif" style={{ color: "var(--text-primary)" }}>
+          <h2 className="text-lg" style={{ color: "var(--text-primary)" }}>
             通知设置
           </h2>
-          <div
-            className="w-8 h-[2px] rounded-full"
-            style={{ background: "var(--gold)", opacity: 0.5 }}
-          />
         </div>
         <div className="flex gap-2">
           <button className="btn btn-outline btn-sm" onClick={handleReset}>
@@ -100,10 +103,10 @@ export default function NotificationSection({ onDirtyChange }: { onDirtyChange?:
               onClick={() => toggle(key)}
             >
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-mono" style={{ color: "var(--text-primary)" }}>
+                <p className="text-sm" style={{ color: "var(--text-primary)" }}>
                   {label}
                 </p>
-                <p className="text-[11px] mt-0.5 font-mono" style={{ color: "var(--text-muted)" }}>
+                <p className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>
                   {desc}
                 </p>
               </div>
@@ -129,5 +132,15 @@ export default function NotificationSection({ onDirtyChange }: { onDirtyChange?:
         })}
       </div>
     </section>
+
+    <ConfirmDialog
+      open={confirmReset}
+      title="恢复默认通知设置"
+      message="确定将通知设置恢复为默认值？修改后需点击保存才会生效。"
+      confirmLabel="恢复默认"
+      onConfirm={confirmResetPrefs}
+      onClose={() => setConfirmReset(false)}
+    />
+    </>
   );
 }

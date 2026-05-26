@@ -150,7 +150,7 @@ function TreeNode({
         {entry.name}
       </span>
       <span
-        className="text-[10px] font-mono opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+        className="text-[10px] opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
         style={{ color: "var(--text-muted)" }}
       >
         {formatSize(entry.size)}

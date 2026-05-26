@@ -5,6 +5,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, Plus, Pencil, Trash2 } from "lucide-react";
 import type { KanbanColumn as ColumnType, KanbanCard as CardType } from "@/types";
 import { useKanbanStore } from "@/stores/useKanbanStore";
+import { useNotificationStore } from "@/stores/useNotificationStore";
 import KanbanCard from "./KanbanCard";
 import Modal from "@/components/common/Modal";
 
@@ -18,6 +19,7 @@ interface Props {
 
 export default function KanbanColumn({ column, onCardClick, onCardDelete, onCardComplete, onAddTask }: Props) {
   const { updateColumn, deleteColumn } = useKanbanStore();
+  const { addToast } = useNotificationStore();
   const { setNodeRef: setDroppableRef } = useDroppable({
     id: `column-${column.id}`,
     data: { columnId: column.id, isColumn: true },
@@ -28,13 +30,21 @@ export default function KanbanColumn({ column, onCardClick, onCardDelete, onCard
 
   const handleRename = async () => {
     if (!renameTitle.trim()) return;
-    await updateColumn(column.id, renameTitle.trim());
-    setShowRename(false);
+    try {
+      await updateColumn(column.id, renameTitle.trim());
+      setShowRename(false);
+    } catch (e) {
+      addToast({ type: "error", title: "重命名失败", message: String(e) });
+    }
   };
 
   const handleDeleteColumn = async () => {
-    await deleteColumn(column.id);
-    setShowDeleteConfirm(false);
+    try {
+      await deleteColumn(column.id);
+      setShowDeleteConfirm(false);
+    } catch (e) {
+      addToast({ type: "error", title: "删除列失败", message: String(e) });
+    }
   };
 
   return (
@@ -52,7 +62,7 @@ export default function KanbanColumn({ column, onCardClick, onCardDelete, onCard
           style={{ borderColor: "var(--border-light)" }}
         >
           <h3
-            className="text-sm font-serif truncate"
+            className="text-sm truncate"
             style={{ color: "var(--text-primary)" }}
           >
             {column.title}

@@ -49,13 +49,9 @@ export default function ConnectShare({ onSwitchToMyShares }: Props) {
         <div className="card p-5 flex-1 overflow-y-auto">
           <div className="flex items-center gap-3 mb-1">
             <Wifi size={14} strokeWidth={1.5} style={{ color: "var(--gold)" }} />
-            <h3 className="font-serif text-base" style={{ color: "var(--text-primary)" }}>
+            <h3 className="text-base" style={{ color: "var(--text-primary)" }}>
               局域网实例
             </h3>
-            <div
-              className="w-8 h-[2px] rounded-full"
-              style={{ background: "var(--gold)", opacity: 0.5 }}
-            />
           </div>
           <p className="text-xs mb-4" style={{ color: "var(--text-muted)" }}>
             发现局域网内运行 Fileosophy 的设备，点击可自动填充连接地址
@@ -75,7 +71,7 @@ export default function ConnectShare({ onSwitchToMyShares }: Props) {
                     <p className="text-xs truncate" style={{ color: "var(--text-primary)" }}>
                       {peer.name}
                     </p>
-                    <p className="text-xs font-mono truncate" style={{ color: "var(--text-tertiary)" }}>
+                    <p className="text-xs truncate" style={{ color: "var(--text-tertiary)" }}>
                       {peer.addresses[0]}:{peer.port}
                     </p>
                   </div>
@@ -101,13 +97,9 @@ export default function ConnectShare({ onSwitchToMyShares }: Props) {
         <div className="card p-5 flex-1 overflow-y-auto">
           <div className="flex items-center gap-3 mb-1">
             <Link size={14} strokeWidth={1.5} style={{ color: "var(--gold)" }} />
-            <h3 className="font-serif text-base" style={{ color: "var(--text-primary)" }}>
+            <h3 className="text-base" style={{ color: "var(--text-primary)" }}>
               手动连接
             </h3>
-            <div
-              className="w-8 h-[2px] rounded-full"
-              style={{ background: "var(--gold)", opacity: 0.5 }}
-            />
           </div>
           <p className="text-xs mb-4" style={{ color: "var(--text-muted)" }}>
             输入对方的 IP 地址和密码来连接
@@ -137,7 +129,7 @@ export default function ConnectShare({ onSwitchToMyShares }: Props) {
                 value={addr}
                 onChange={(e) => setAddr(e.target.value)}
                 placeholder="192.168.1.5:54321"
-                className="input-base w-full font-mono"
+                className="input-base w-full"
                 disabled={connecting}
                 onKeyDown={(e) => e.key === "Enter" && handleConnect()}
               />

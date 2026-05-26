@@ -6,6 +6,7 @@ use tauri::State;
 
 const NOTIFICATION_KEY: &str = "notification_history";
 const NOTIFICATION_PREFS_KEY: &str = "notification_preferences";
+const MAX_NOTIFICATIONS: usize = 500;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct NotificationPreferences {
@@ -71,6 +72,12 @@ pub fn add_notification(
         created_at: chrono::Utc::now().to_rfc3339(),
         link,
     });
+
+    // 自动清理超出限制的旧通知（保留最新的）
+    if notifications.len() > MAX_NOTIFICATIONS {
+        let drain_count = notifications.len() - MAX_NOTIFICATIONS;
+        notifications.drain(0..drain_count);
+    }
 
     let new_json = serde_json::to_string(&notifications).unwrap_or_else(|_| "[]".to_string());
     set_setting(&conn, NOTIFICATION_KEY, &new_json)?;

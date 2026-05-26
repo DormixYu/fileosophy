@@ -4,6 +4,7 @@ import { useSettingsStore } from "@/stores/useSettingsStore";
 import { useNotificationStore } from "@/stores/useNotificationStore";
 import type { ShortcutConfig } from "@/types";
 import { DEFAULT_SHORTCUTS } from "@/types";
+import { ConfirmDialog } from "@/components/common/Modal";
 
 function formatShortcut(shortcut: string): string {
   return shortcut
@@ -20,6 +21,7 @@ export default function ShortcutsSection({ onDirtyChange }: { onDirtyChange?: (d
   const [editing, setEditing] = useState<ShortcutConfig[]>([]);
   const [recordingIndex, setRecordingIndex] = useState<number | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
 
   useEffect(() => {
     setEditing([...shortcuts]);
@@ -85,24 +87,26 @@ export default function ShortcutsSection({ onDirtyChange }: { onDirtyChange?: (d
   };
 
   const handleReset = () => {
+    setConfirmReset(true);
+  };
+
+  const confirmResetShortcuts = () => {
     setEditing([...DEFAULT_SHORTCUTS]);
     setDirty(true);
+    setConfirmReset(false);
   };
 
   return (
+    <>
     <section className="animate-slide-up">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <h2
-            className="text-title font-serif"
+            className="text-lg"
             style={{ color: "var(--text-primary)" }}
           >
             全局快捷键
           </h2>
-          <div
-            className="w-8 h-[2px] rounded-full"
-            style={{ background: "var(--gold)", opacity: 0.5 }}
-          />
         </div>
         <div className="flex gap-2">
           <button className="btn btn-outline btn-sm" onClick={handleReset}>
@@ -122,7 +126,7 @@ export default function ShortcutsSection({ onDirtyChange }: { onDirtyChange?: (d
       </div>
 
       <p
-        className="text-xs mb-4 font-mono"
+        className="text-xs mb-4"
         style={{ color: "var(--text-tertiary)" }}
       >
         点击快捷键区域，按下新的组合键来修改。保存后立即生效。
@@ -136,21 +140,21 @@ export default function ShortcutsSection({ onDirtyChange }: { onDirtyChange?: (d
           >
             <div className="flex-1 min-w-0">
               <p
-                className="text-sm font-serif"
+                className="text-sm"
                 style={{ color: "var(--text-primary)" }}
               >
                 {sc.label}
               </p>
               <p
-                className="text-xs mt-0.5 font-mono"
+                className="text-xs mt-0.5"
                 style={{ color: "var(--text-tertiary)" }}
               >
                 {sc.description}
               </p>
             </div>
-            {/* 品牌 kbd 按钮：bg-surface-alt + border-default + font-mono */}
+            {/* 品牌 kbd 按钮：bg-surface-alt + border-default + */}
             <button
-              className="px-3 py-1.5 rounded-md text-xs font-mono transition-all min-w-[140px] text-center"
+              className="px-3 py-1.5 rounded-md text-xs transition-all min-w-[140px] text-center"
               style={{
                 background:
                   recordingIndex === index
@@ -183,5 +187,15 @@ export default function ShortcutsSection({ onDirtyChange }: { onDirtyChange?: (d
         ))}
       </div>
     </section>
+
+    <ConfirmDialog
+      open={confirmReset}
+      title="恢复默认快捷键"
+      message="确定将所有快捷键恢复为默认值？修改后需点击保存才会生效。"
+      confirmLabel="恢复默认"
+      onConfirm={confirmResetShortcuts}
+      onClose={() => setConfirmReset(false)}
+    />
+    </>
   );
 }

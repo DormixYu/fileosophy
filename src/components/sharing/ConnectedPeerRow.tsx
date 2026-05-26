@@ -1,33 +1,25 @@
-import { useState } from "react";
 import { RefreshCw, FolderOpen, X } from "lucide-react";
 import { useShareStore } from "@/stores/useShareStore";
 import { useNotificationStore } from "@/stores/useNotificationStore";
-import { shareApi } from "@/lib/tauri-api";
-import type { SavedConnection } from "@/types";
+import type { SharedConnection } from "@/types";
 
 import { formatTimeFull } from "@/lib/formatUtils";
 
 interface ConnectedPeerRowProps {
-  conn: SavedConnection;
+  conn: SharedConnection;
   onBrowse: () => void;
 }
 
 export default function ConnectedPeerRow({ conn, onBrowse }: ConnectedPeerRowProps) {
   const { reconnect, removeConnection } = useShareStore();
   const { addToast } = useNotificationStore();
-  const [reconnectPassword, setReconnectPassword] = useState("");
-  const [showPasswordInput, setShowPasswordInput] = useState(false);
 
   const handleReconnect = async () => {
-    if (!reconnectPassword.trim()) return;
-    try {
-      await shareApi.join(conn.addr, reconnectPassword.trim());
-      await reconnect(conn.addr);
+    const ok = await reconnect(conn.addr);
+    if (ok) {
       addToast({ type: "success", title: "重连成功", message: conn.label });
-      setShowPasswordInput(false);
-      setReconnectPassword("");
-    } catch (e) {
-      addToast({ type: "error", title: "重连失败", message: String(e) });
+    } else {
+      addToast({ type: "error", title: "重连失败", message: "无法连接到远程共享" });
     }
   };
 
@@ -44,34 +36,21 @@ export default function ConnectedPeerRow({ conn, onBrowse }: ConnectedPeerRowPro
     <div className="card flex items-center gap-4 p-4 animate-slide-up">
       {/* 标签 */}
       <div className="flex-1 min-w-0">
-        <p className="font-serif text-sm truncate" style={{ color: "var(--text-primary)" }}>
+        <p className="text-sm truncate" style={{ color: "var(--text-primary)" }}>
           {conn.label}
         </p>
       </div>
 
       {/* 地址 */}
-      <span className="shrink-0 text-xs font-mono text-gold">
+      <span className="shrink-0 text-xs text-gold">
         {conn.addr}
       </span>
 
       {/* 上次连接 */}
       {conn.last_connected && (
-        <span className="shrink-0 text-xs font-mono" style={{ color: "var(--text-tertiary)" }}>
+        <span className="shrink-0 text-xs" style={{ color: "var(--text-tertiary)" }}>
           {formatTimeFull(conn.last_connected)}
         </span>
-      )}
-
-      {/* 重连密码输入 */}
-      {showPasswordInput && (
-        <input
-          type="password"
-          value={reconnectPassword}
-          onChange={(e) => setReconnectPassword(e.target.value)}
-          placeholder="输入密码"
-          autoFocus
-          className="input-base w-28 text-xs"
-          onKeyDown={(e) => e.key === "Enter" && handleReconnect()}
-        />
       )}
 
       {/* 操作按钮 */}
@@ -80,16 +59,10 @@ export default function ConnectedPeerRow({ conn, onBrowse }: ConnectedPeerRowPro
           <FolderOpen size={12} strokeWidth={1.5} />
           浏览
         </button>
-        {showPasswordInput ? (
-          <button className="btn btn-primary btn-sm" onClick={handleReconnect} disabled={!reconnectPassword.trim()}>
-            确认
-          </button>
-        ) : (
-          <button className="btn btn-ghost btn-sm" onClick={() => setShowPasswordInput(true)}>
-            <RefreshCw size={12} strokeWidth={1.5} />
-            重连
-          </button>
-        )}
+        <button className="btn btn-ghost btn-sm" onClick={handleReconnect}>
+          <RefreshCw size={12} strokeWidth={1.5} />
+          重连
+        </button>
         <button
           className="btn btn-ghost btn-sm hover-danger-text"
           onClick={handleDisconnect}

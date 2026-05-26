@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import { LayoutDashboard, FolderKanban, GanttChart, Share2, Settings, Plus, Bell } from "lucide-react";
+import { LayoutDashboard, FolderKanban, GanttChart, Share2, Settings, Plus, Bell, Search } from "lucide-react";
 import { systemApi } from "@/lib/tauri-api";
 import { getInitials } from "@/lib/formatUtils";
 import { useProjectStore } from "@/stores/useProjectStore";
@@ -67,26 +67,36 @@ export default function Layout() {
               />
             </svg>
             <span
-              className="font-serif text-sm uppercase tracking-[0.15em]"
+              className="text-sm uppercase tracking-[0.15em]"
               style={{ color: "var(--text-primary)", fontWeight: 300 }}
             >
               Fileosophy
             </span>
           </div>
-          <button
-            className="relative p-1.5 rounded-md transition-colors hover-gold-bg"
-            style={{ color: "var(--text-secondary)" }}
-            aria-label="通知"
-            onClick={() => setShowNotifications(true)}
-          >
-            <Bell size={16} strokeWidth={1.5} />
-            {unreadCount > 0 && (
-              <span
-                className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full"
-                style={{ background: "var(--gold)" }}
-              />
-            )}
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              className="p-1.5 rounded-md transition-colors hover-gold-bg"
+              style={{ color: "var(--text-secondary)" }}
+              aria-label="搜索"
+              onClick={() => window.dispatchEvent(new CustomEvent("global-shortcut", { detail: "global_search" }))}
+            >
+              <Search size={16} strokeWidth={1.5} />
+            </button>
+            <button
+              className="relative p-1.5 rounded-md transition-colors hover-gold-bg"
+              style={{ color: "var(--text-secondary)" }}
+              aria-label="通知"
+              onClick={() => setShowNotifications(true)}
+            >
+              <Bell size={16} strokeWidth={1.5} />
+              {unreadCount > 0 && (
+                <span
+                  className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full"
+                  style={{ background: "var(--gold)" }}
+                />
+              )}
+            </button>
+          </div>
         </div>
 
         {/* ── 导航区 ── */}
@@ -174,7 +184,7 @@ export default function Layout() {
             />
           ) : (
             <div
-              className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-serif shrink-0"
+              className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] shrink-0"
               style={{
                 background: "var(--gold-glow-strong)",
                 color: "var(--gold)",

@@ -1,3 +1,4 @@
+use crate::commands::utils;
 use mdns_sd::{ServiceDaemon, ServiceEvent, ServiceInfo};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -10,6 +11,7 @@ pub struct Peer {
     pub name: String,
     pub host: String,
     pub port: u16,
+    pub share_port: Option<u16>,
     pub addresses: Vec<String>,
     pub token: String,
 }
@@ -19,6 +21,8 @@ pub struct MdnsService {
     peers: Arc<Mutex<HashMap<String, Peer>>>,
     registered_name: Option<String>,
     registered_fullname: Option<String>,
+    transfer_port: u16,
+    transfer_token: String,
 }
 
 impl MdnsService {
@@ -29,17 +33,22 @@ impl MdnsService {
             peers: Arc::new(Mutex::new(HashMap::new())),
             registered_name: None,
             registered_fullname: None,
+            transfer_port: 0,
+            transfer_token: String::new(),
         })
     }
 
     /// 注册本机为 Fileosophy 服务实例
-    pub fn register(&mut self, port: u16, token: &str) -> Result<(), String> {
-        let hostname = get_hostname();
+    pub fn register(&mut self, port: u16, token: &str, share_port: Option<u16>) -> Result<(), String> {
+        let hostname = utils::get_hostname();
 
         let instance_name = format!("Fileosophy@{hostname}");
         let mut properties = std::collections::HashMap::new();
         properties.insert("name".to_string(), hostname.clone());
         properties.insert("token".to_string(), token.to_string());
+        if let Some(sp) = share_port {
+            properties.insert("share_port".to_string(), sp.to_string());
+        }
 
         let my_ip = local_ip_address::local_ip()
             .map(|ip| ip.to_string())
@@ -61,7 +70,46 @@ impl MdnsService {
 
         self.registered_name = Some(instance_name.clone());
         self.registered_fullname = Some(format!("{instance_name}.{SERVICE_TYPE}"));
-        log::info!("mDNS 服务已注册，端口: {port}");
+        self.transfer_port = port;
+        self.transfer_token = token.to_string();
+        log::info!("mDNS 服务已注册，端口: {port}, 共享端口: {:?}", share_port);
+        Ok(())
+    }
+
+    /// 更新共享端口（共享启动/停止时调用）
+    pub fn update_share_port(&mut self, share_port: Option<u16>) -> Result<(), String> {
+        let Some(ref name) = self.registered_name else {
+            return Err("mDNS 服务未注册".to_string());
+        };
+        let instance_name = name.clone();
+        let hostname = utils::get_hostname();
+
+        let mut properties = std::collections::HashMap::new();
+        properties.insert("name".to_string(), hostname.clone());
+        properties.insert("token".to_string(), self.transfer_token.clone());
+        if let Some(sp) = share_port {
+            properties.insert("share_port".to_string(), sp.to_string());
+        }
+
+        let my_ip = local_ip_address::local_ip()
+            .map(|ip| ip.to_string())
+            .unwrap_or_else(|_| "127.0.0.1".to_string());
+
+        let service_info = ServiceInfo::new(
+            SERVICE_TYPE,
+            &instance_name,
+            &format!("{instance_name}.local."),
+            my_ip,
+            self.transfer_port,
+            properties,
+        )
+        .map_err(|e| format!("创建服务信息失败: {e}"))?;
+
+        self.daemon
+            .register(service_info)
+            .map_err(|e| format!("更新 mDNS 共享端口失败: {e}"))?;
+
+        log::info!("mDNS 共享端口已更新: {:?}", share_port);
         Ok(())
     }
 
@@ -95,11 +143,15 @@ impl MdnsService {
                         let token = info.get_property_val_str("token")
                             .map(|s| s.to_string())
                             .unwrap_or_default();
+                        let share_port = info.get_property_val_str("share_port")
+                            .and_then(|s| s.parse::<u16>().ok())
+                            .filter(|&p| p > 0);
 
                         let peer = Peer {
                             name: resolved_name.clone(),
                             host,
                             port,
+                            share_port,
                             addresses,
                             token,
                         };
@@ -143,13 +195,4 @@ impl MdnsService {
     }
 }
 
-fn get_hostname() -> String {
-    #[cfg(target_os = "windows")]
-    {
-        std::env::var("COMPUTERNAME").unwrap_or_else(|_| "PC".to_string())
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        std::env::var("HOSTNAME").unwrap_or_else(|_| "device".to_string())
-    }
-}
+

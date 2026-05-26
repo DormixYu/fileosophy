@@ -1,4 +1,5 @@
-use tauri::{AppHandle, State};
+use std::fs;
+use tauri::{AppHandle, Manager, State};
 
 use crate::db::models::Project;
 use crate::db::DbConn;
@@ -235,9 +236,12 @@ pub fn create_project(
         conn.execute_batch("ROLLBACK").ok();
     }
 
-    tx_result.inspect(|project| {
-        events::emit_notification(&app, "success", "项目已创建", &project.name, Some(&format!("/project/{}", project.id)));
-    })
+    if let Ok(ref project) = tx_result {
+        let link = format!("/project/{}", project.id);
+        events::emit_notification_checked(&app, db.inner(), "project_created", "success", "项目已创建", &project.name, Some(&link));
+    }
+
+    tx_result
 }
 
 #[tauri::command]
@@ -253,6 +257,18 @@ pub fn update_project(
     end_date: Option<String>,
 ) -> Result<Project, String> {
     let conn = db.lock().map_err(|e| e.to_string())?;
+
+    // 权限检查：共享项目的 member 角色不能修改元数据
+    let is_member = conn.query_row(
+        "SELECT role FROM shared_projects WHERE local_project_id = ?1",
+        rusqlite::params![id],
+        |row| row.get::<_, String>(0),
+    ).ok();
+    if is_member.as_deref() == Some("member") {
+        if name.is_some() || status.is_some() || start_date.is_some() || end_date.is_some() {
+            return Err("共享项目成员不能修改项目名称、状态和日期".to_string());
+        }
+    }
 
     // 动态构建 UPDATE 语句
     let mut sets = Vec::new();
@@ -373,34 +389,72 @@ pub fn update_project(
         }
     }
 
-    get_project_by_id_inner(&conn, id).inspect(|project| {
-        // 仅当状态变更时发送通知
-        if status.is_some() && old_status.as_ref() != status.as_ref() {
-            let status_label = match project.status.as_deref() {
-                Some("planning") => "规划中",
-                Some("in_progress") => "进行中",
-                Some("on_hold") => "已暂停",
-                Some("completed") => "已完成",
-                Some("cancelled") => "已取消",
-                _ => "未知",
-            };
-            events::emit_notification(&app, "info", "项目状态变更", &format!("{}: {}", project.name, status_label), Some(&format!("/project/{}", project.id)));
-        }
-    })
+    let project = get_project_by_id_inner(&conn, id)?;
+
+    // 仅当状态变更时发送通知（先收集信息，释放锁后再发送）
+    let should_notify = status.is_some() && old_status.as_ref() != status.as_ref();
+    let notify_info = if should_notify {
+        let status_label = match project.status.as_deref() {
+            Some("planning") => "规划中",
+            Some("in_progress") => "进行中",
+            Some("on_hold") => "已暂停",
+            Some("completed") => "已完成",
+            Some("cancelled") => "已取消",
+            _ => "未知",
+        };
+        Some((format!("{}: {}", project.name, status_label), format!("/project/{}", project.id)))
+    } else {
+        None
+    };
+
+    drop(conn);
+
+    if let Some((msg, link)) = notify_info {
+        events::emit_notification_checked(&app, db.inner(), "project_status_changed", "info", "项目状态变更", &msg, Some(&link));
+    }
+
+    Ok(project)
 }
 
 #[tauri::command]
 pub fn delete_project(app: AppHandle, db: State<'_, DbConn>, id: i64) -> Result<(), String> {
     let conn = db.lock().map_err(|e| e.to_string())?;
-    // 获取项目名称用于通知
-    let name: String = conn.query_row(
-        "SELECT name FROM projects WHERE id = ?1", [id],
-        |row| row.get(0),
-    ).unwrap_or_else(|_| "项目".to_string());
+    // 获取项目名称和 folder_path 用于清理磁盘文件
+    let (name, folder_path): (String, Option<String>) = conn.query_row(
+        "SELECT name, folder_path FROM projects WHERE id = ?1", [id],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    ).unwrap_or_else(|_| ("项目".to_string(), None));
+
     conn.execute("DELETE FROM projects WHERE id = ?1", [id])
         .map_err(|e| e.to_string())?;
+    drop(conn); // 释放锁后再执行文件操作
 
-    events::emit_notification(&app, "warning", "项目已删除", &name, None);
+    // 清理应用数据目录下的项目文件
+    let mut cleanup_errors = Vec::new();
+    if let Ok(app_data_dir) = app.path().app_data_dir() {
+        let project_files_dir = app_data_dir.join("files").join(id.to_string());
+        if project_files_dir.exists() {
+            if let Err(e) = fs::remove_dir_all(&project_files_dir) {
+                cleanup_errors.push(format!("清理项目文件失败: {e}"));
+            }
+        }
+    }
+
+    // 清理项目关联的外部文件夹
+    if let Some(ref path) = folder_path {
+        let p = std::path::Path::new(path);
+        if p.exists() && p.is_dir() {
+            if let Err(e) = fs::remove_dir_all(p) {
+                cleanup_errors.push(format!("清理项目文件夹失败: {e}"));
+            }
+        }
+    }
+
+    if !cleanup_errors.is_empty() {
+        log::warn!("项目删除时磁盘清理不完整: {}", cleanup_errors.join("; "));
+    }
+
+    events::emit_notification_checked(&app, db.inner(), "project_deleted", "warning", "项目已删除", &name, None);
 
     Ok(())
 }

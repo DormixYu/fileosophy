@@ -29,7 +29,7 @@ function KanbanPreview() {
           className="flex-1 flex flex-col gap-0.5 rounded p-1"
           style={{ background: "var(--bg-void)", border: "1px solid var(--border-light)" }}
         >
-          <div className="text-[6px] font-mono text-center" style={{ color: ci === 2 ? "var(--gold)" : "var(--text-muted)" }}>
+          <div className="text-[6px] text-center" style={{ color: ci === 2 ? "var(--gold)" : "var(--text-muted)" }}>
             {col.title}
           </div>
           {col.cards.map((card) => (
@@ -57,7 +57,7 @@ function GanttPreview() {
     <div className="w-full flex flex-col gap-1" style={{ height: 56 }}>
       {tasks.map((task) => (
         <div key={task.name} className="flex items-center gap-1.5">
-          <div className="text-[6px] font-mono w-8 shrink-0" style={{ color: "var(--text-secondary)" }}>{task.name}</div>
+          <div className="text-[6px] w-8 shrink-0" style={{ color: "var(--text-secondary)" }}>{task.name}</div>
           <div className="flex-1 relative h-2.5 rounded" style={{ background: "var(--bg-void)" }}>
             <div className="absolute h-2.5 rounded" style={{ left: `${task.start}%`, width: `${task.width}%`, background: task.color, opacity: 0.6 }} />
           </div>
@@ -79,7 +79,7 @@ function FilePreview() {
       {rows.map((row) => (
         <div key={row.name} className="flex items-center gap-1" style={{ marginLeft: row.indent * 10 }}>
           <span className="text-[7px]" style={{ color: row.color }}>{row.icon}</span>
-          <span className="text-[6px] font-mono truncate" style={{ color: row.indent === 0 ? "var(--text-primary)" : "var(--text-secondary)" }}>
+          <span className="text-[6px] truncate" style={{ color: row.indent === 0 ? "var(--text-primary)" : "var(--text-secondary)" }}>
             {row.name}
           </span>
         </div>
@@ -95,7 +95,7 @@ function SharePreview() {
         className="w-8 h-8 rounded-md flex items-center justify-center"
         style={{ background: "var(--gold-glow)", border: "1px solid var(--gold)" }}
       >
-        <span className="text-[7px] font-mono" style={{ color: "var(--gold)" }}>本机</span>
+        <span className="text-[7px]" style={{ color: "var(--gold)" }}>本机</span>
       </div>
       <div className="flex items-center gap-1">
         <div className="w-4 h-px" style={{ background: "var(--gold)", opacity: 0.5 }} />
@@ -106,7 +106,7 @@ function SharePreview() {
         className="w-8 h-8 rounded-md flex items-center justify-center"
         style={{ background: "var(--bg-void)", border: "1px solid var(--border-default)" }}
       >
-        <span className="text-[7px] font-mono" style={{ color: "var(--text-secondary)" }}>同事</span>
+        <span className="text-[7px]" style={{ color: "var(--text-secondary)" }}>同事</span>
       </div>
     </div>
   );
@@ -211,10 +211,10 @@ export default function OnboardingOverlay({ onComplete }: OnboardingOverlayProps
                   />
                 </svg>
               </div>
-              <h1 className="text-2xl font-serif animate-fade-in" style={{ color: "var(--text-primary)" }}>
+              <h1 className="text-2xl animate-fade-in" style={{ color: "var(--text-primary)" }}>
                 飞序 · Fileosophy
               </h1>
-              <p className="text-sm font-serif animate-fade-in" style={{ color: "var(--text-secondary)" }}>
+              <p className="text-sm animate-fade-in" style={{ color: "var(--text-secondary)" }}>
                 在有序的体系中迸发思想的自由
               </p>
               <p className="text-xs animate-fade-in" style={{ color: "var(--text-muted)", animationDelay: "0.3s" }}>
@@ -227,7 +227,7 @@ export default function OnboardingOverlay({ onComplete }: OnboardingOverlayProps
           {step === 1 && (
             <div className="space-y-5">
               <div className="text-center">
-                <h2 className="text-lg font-serif" style={{ color: "var(--text-primary)" }}>选择你的风格</h2>
+                <h2 className="text-lg" style={{ color: "var(--text-primary)" }}>选择你的风格</h2>
                 <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>随时可以在设置中更改</p>
               </div>
               <div className="grid grid-cols-3 gap-4">
@@ -252,7 +252,7 @@ export default function OnboardingOverlay({ onComplete }: OnboardingOverlayProps
                     >
                       <Icon size={20} strokeWidth={1.5} style={{ color: settings.theme === key ? "var(--gold)" : "var(--text-tertiary)" }} />
                     </div>
-                    <span className="text-xs font-mono" style={{ color: settings.theme === key ? "var(--gold)" : "var(--text-secondary)" }}>
+                    <span className="text-xs" style={{ color: settings.theme === key ? "var(--gold)" : "var(--text-secondary)" }}>
                       {label}
                     </span>
                   </button>
@@ -265,7 +265,7 @@ export default function OnboardingOverlay({ onComplete }: OnboardingOverlayProps
           {step === 2 && (
             <div className="space-y-5">
               <div className="text-center">
-                <h2 className="text-lg font-serif" style={{ color: "var(--text-primary)" }}>你是谁？</h2>
+                <h2 className="text-lg" style={{ color: "var(--text-primary)" }}>你是谁？</h2>
                 <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>方便团队成员识别你</p>
               </div>
               <div className="flex justify-center">
@@ -283,7 +283,7 @@ export default function OnboardingOverlay({ onComplete }: OnboardingOverlayProps
                   onChange={(e) => setUserName(e.target.value)}
                   placeholder="输入你的名字"
                   autoFocus
-                  className="input-base w-full text-center text-sm font-serif"
+                  className="input-base w-full text-center text-sm"
                   onKeyDown={(e) => e.key === "Enter" && goNext()}
                   maxLength={20}
                 />
@@ -295,7 +295,7 @@ export default function OnboardingOverlay({ onComplete }: OnboardingOverlayProps
           {step === 3 && (
             <div className="space-y-4">
               <div className="text-center">
-                <h2 className="text-lg font-serif" style={{ color: "var(--text-primary)" }}>核心功能</h2>
+                <h2 className="text-lg" style={{ color: "var(--text-primary)" }}>核心功能</h2>
                 <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>四大能力，覆盖项目管理全流程</p>
               </div>
               <div className="grid grid-cols-2 gap-2.5">
@@ -310,8 +310,8 @@ export default function OnboardingOverlay({ onComplete }: OnboardingOverlayProps
                     }}
                   >
                     <div className="flex items-center gap-1.5 mb-1.5">
-                      <span className="text-[11px] font-serif" style={{ color: "var(--gold)" }}>{label}</span>
-                      <span className="text-[9px] font-mono" style={{ color: "var(--text-muted)" }}>{desc}</span>
+                      <span className="text-[11px]" style={{ color: "var(--gold)" }}>{label}</span>
+                      <span className="text-[9px]" style={{ color: "var(--text-muted)" }}>{desc}</span>
                     </div>
                     <Preview />
                   </div>
@@ -324,7 +324,7 @@ export default function OnboardingOverlay({ onComplete }: OnboardingOverlayProps
           {step === 4 && (
             <div className="space-y-3">
               <div className="text-center">
-                <h2 className="text-lg font-serif" style={{ color: "var(--text-primary)" }}>快速上手</h2>
+                <h2 className="text-lg" style={{ color: "var(--text-primary)" }}>快速上手</h2>
                 <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>四步开始你的第一个项目</p>
               </div>
               <div className="grid grid-cols-2 gap-2">
@@ -335,20 +335,20 @@ export default function OnboardingOverlay({ onComplete }: OnboardingOverlayProps
                     style={{ background: "var(--bg-surface)", border: "1px solid var(--border-light)" }}
                   >
                     <div
-                      className="w-5 h-5 rounded flex items-center justify-center shrink-0 text-[9px] font-mono"
+                      className="w-5 h-5 rounded flex items-center justify-center shrink-0 text-[9px]"
                       style={{ background: "var(--gold-glow)", color: "var(--gold)", border: "1px solid var(--gold)" }}
                     >
                       {num}
                     </div>
                     <div>
-                      <span className="text-[11px] font-serif" style={{ color: "var(--text-primary)" }}>{title}</span>
-                      <p className="text-[9px] font-mono mt-0.5 leading-snug" style={{ color: "var(--text-muted)" }}>{desc}</p>
+                      <span className="text-[11px]" style={{ color: "var(--text-primary)" }}>{title}</span>
+                      <p className="text-[9px] mt-0.5 leading-snug" style={{ color: "var(--text-muted)" }}>{desc}</p>
                     </div>
                   </div>
                 ))}
               </div>
               <div className="pt-2" style={{ borderTop: "1px solid var(--border-light)" }}>
-                <p className="text-[8px] font-mono uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>
+                <p className="text-[8px] uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>
                   快捷键
                 </p>
                 <div className="flex gap-3">
@@ -356,7 +356,7 @@ export default function OnboardingOverlay({ onComplete }: OnboardingOverlayProps
                     <div key={key} className="flex items-center gap-1">
                       <span className="text-[9px]" style={{ color: "var(--text-secondary)" }}>{desc}</span>
                       <span
-                        className="text-[9px] font-mono px-1 py-px rounded"
+                        className="text-[9px] px-1 py-px rounded"
                         style={{ background: "var(--bg-surface)", border: "1px solid var(--border-light)", color: "var(--gold)" }}
                       >
                         {key}

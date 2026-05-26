@@ -88,13 +88,8 @@ export default function Modal({
               style={{ borderBottom: "1px solid var(--border-light)" }}
             >
               <div className="flex items-center gap-3 min-w-0">
-                {/* 鎏金装饰线 */}
-                <div
-                  className="w-1 h-5 shrink-0 rounded-full"
-                  style={{ background: "var(--gold)" }}
-                />
                 <h2
-                  className="text-base font-serif tracking-wide truncate"
+                  className="text-base truncate"
                   style={{ color: "var(--text-primary)" }}
                 >
                   {title}
@@ -106,6 +101,7 @@ export default function Modal({
                   onClick={onClose}
                   className="p-1.5 rounded-md transition-all hover-gold-bg"
                   style={{ color: "var(--text-tertiary)" }}
+                  aria-label="关闭"
                 >
                   <X size={16} strokeWidth={1.5} />
                 </button>

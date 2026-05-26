@@ -2,6 +2,7 @@ import { formatDate, formatDateTime } from "@/lib/formatUtils";
 import type {
   Project,
   ProjectStatusConfig,
+  ProjectTypeConfig,
   ProjectStatusHistory,
 } from "@/types";
 
@@ -9,6 +10,7 @@ interface TooltipPopupProps {
   project: Project;
   mousePos: { x: number; y: number };
   getStatusConfig: (id?: string | null) => ProjectStatusConfig | undefined;
+  getTypeConfig: (id?: string | null) => ProjectTypeConfig | undefined;
   histories: ProjectStatusHistory[];
   onClose: () => void;
 }
@@ -17,10 +19,12 @@ export default function TooltipPopup({
   project,
   mousePos,
   getStatusConfig,
+  getTypeConfig,
   histories,
   onClose,
 }: TooltipPopupProps) {
   const config = getStatusConfig(project.status);
+  const typeConfig = getTypeConfig(project.project_type);
   const sortedHistories = [...histories].sort(
     (a, b) => b.changed_at.localeCompare(a.changed_at),
   );
@@ -44,7 +48,7 @@ export default function TooltipPopup({
       }}
       onMouseLeave={onClose}
     >
-      <div className="font-serif font-medium text-sm mb-2" style={{ color: "var(--text-primary)" }}>
+      <div className="font-medium text-sm mb-2" style={{ color: "var(--text-primary)" }}>
         {project.name}
       </div>
 
@@ -65,7 +69,7 @@ export default function TooltipPopup({
             </span>
           }
         />
-        <Row label="分类" value={project.project_type || "—"} />
+        <Row label="分类" value={typeConfig?.name || project.project_type || "—"} />
         <Row label="开始日期" value={formatDate(project.start_date || "")} />
         <Row label="截止日期" value={formatDate(project.end_date || "")} />
       </div>

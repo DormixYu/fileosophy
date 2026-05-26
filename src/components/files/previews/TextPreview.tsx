@@ -10,7 +10,7 @@ export default function TextPreview({ content }: Props) {
         background: "var(--bg-surface-alt)",
         border: "1px solid var(--border-light)",
         color: "var(--text-secondary)",
-        fontFamily: '"DM Mono", monospace',
+        fontFamily: '"PingFang SC", sans-serif',
         maxHeight: "calc(80vh - 120px)",
       }}
     >

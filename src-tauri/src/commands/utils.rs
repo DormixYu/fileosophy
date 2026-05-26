@@ -1,3 +1,10 @@
+/// 获取本机主机名
+pub fn get_hostname() -> String {
+    std::env::var("COMPUTERNAME")
+        .or_else(|_| std::env::var("HOSTNAME"))
+        .unwrap_or_else(|_| "Fileosophy".to_string())
+}
+
 /// 从 settings 表读取值
 pub fn get_setting(conn: &rusqlite::Connection, key: &str) -> Option<String> {
     conn.query_row(
@@ -21,6 +28,51 @@ pub fn set_setting(conn: &rusqlite::Connection, key: &str, value: &str) -> Resul
 /// hex 编码辅助
 pub fn hex_encode(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{:02x}", b)).collect()
+}
+
+/// hex 解码辅助
+pub fn hex_decode(hex: &str) -> Option<Vec<u8>> {
+    if hex.len() % 2 != 0 {
+        return None;
+    }
+    let mut bytes = Vec::with_capacity(hex.len() / 2);
+    for i in (0..hex.len()).step_by(2) {
+        let byte = u8::from_str_radix(&hex[i..i + 2], 16).ok()?;
+        bytes.push(byte);
+    }
+    Some(bytes)
+}
+
+/// 密码混淆密钥（简单 XOR 混淆，防止明文存储）
+const OBFUSCATION_KEY: &[u8] = b"Fileosophy2026Secure";
+
+/// 对密码进行简单混淆编码（存储到数据库时使用）
+pub fn encode_password(password: &str) -> String {
+    let encoded: Vec<u8> = password
+        .bytes()
+        .enumerate()
+        .map(|(i, b)| b ^ OBFUSCATION_KEY[i % OBFUSCATION_KEY.len()])
+        .collect();
+    format!("enc:{}", hex_encode(&encoded))
+}
+
+/// 对混淆编码的密码进行解码（从数据库读取时使用）
+pub fn decode_password(encoded: &str) -> String {
+    // 兼容旧版明文密码
+    let hex_str = match encoded.strip_prefix("enc:") {
+        Some(h) => h,
+        None => return encoded.to_string(),
+    };
+    let bytes = match hex_decode(hex_str) {
+        Some(b) => b,
+        None => return encoded.to_string(),
+    };
+    let decoded: Vec<u8> = bytes
+        .iter()
+        .enumerate()
+        .map(|(i, &b)| b ^ OBFUSCATION_KEY[i % OBFUSCATION_KEY.len()])
+        .collect();
+    String::from_utf8_lossy(&decoded).to_string()
 }
 
 /// TCP 帧协议常量：最大帧大小
@@ -66,5 +118,18 @@ pub fn send_json_frame(stream: &mut std::net::TcpStream, data: &impl serde::Seri
 pub fn set_stream_timeout(stream: &mut std::net::TcpStream, timeout: std::time::Duration) -> Result<(), String> {
     stream.set_read_timeout(Some(timeout)).map_err(|e| format!("设置读超时失败: {e}"))?;
     stream.set_write_timeout(Some(timeout)).map_err(|e| format!("设置写超时失败: {e}"))?;
+    Ok(())
+}
+
+/// 检查路径是否安全（不含 shell 元字符和控制字符，防止命令注入）
+pub fn check_path_safe(path: &str) -> Result<(), String> {
+    if path.contains('&') || path.contains('|') || path.contains(';')
+        || path.contains('^') || path.contains('%') || path.contains('<')
+        || path.contains('>') || path.contains('!') || path.contains('"')
+        || path.contains('\'') || path.contains('`') || path.contains('$')
+        || path.contains('\n') || path.contains('\r')
+    {
+        return Err("路径包含非法字符".to_string());
+    }
     Ok(())
 }

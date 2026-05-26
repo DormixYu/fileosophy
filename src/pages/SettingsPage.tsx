@@ -69,41 +69,23 @@ export default function SettingsPage() {
 
   return (
     <div className="p-8 max-w-2xl animate-slide-up">
-      {/* 页面标题 + 鎏金装饰线 */}
+      {/* 页面标题 */}
       <div className="flex items-center gap-3 mb-6">
         <h1
-          className="text-title font-serif"
+          className="text-title"
           style={{ color: "var(--text-primary)" }}
         >
           设置
         </h1>
-        <div
-          className="w-6 h-[2px] rounded-full"
-          style={{ background: "var(--gold)", opacity: 0.6 }}
-        />
       </div>
 
-      {/* 品牌化标签栏 */}
-      <div
-        className="flex gap-1 mb-6 p-1 rounded-lg"
-        style={{ background: "var(--bg-surface-alt)" }}
-      >
+      {/* 标签栏 */}
+      <div className="tab-group mb-6">
         {tabs.map(({ key, label, icon: Icon }) => (
           <button
             key={key}
             onClick={() => handleTabChange(key)}
-            className="flex items-center gap-2 px-4 py-2 rounded-md text-xs transition-all flex-1 justify-center relative"
-            style={{
-              background:
-                activeTab === key ? "var(--bg-elevated)" : "transparent",
-              color:
-                activeTab === key ? "var(--gold)" : "var(--text-secondary)",
-              boxShadow:
-                activeTab === key ? "var(--shadow-sm)" : "none",
-              cursor: "pointer",
-              border: "none",
-              borderBottom: activeTab === key ? "2px solid var(--gold)" : "2px solid transparent",
-            }}
+            className={`tab-item flex-1 justify-center ${activeTab === key ? "active" : ""}`}
           >
             <Icon size={14} strokeWidth={1.5} />
             {label}

@@ -16,7 +16,7 @@ export interface ProjectDialogProps {
     name: string;
     description?: string;
     project_type?: string;
-    status?: string;
+    status?: ProjectStatus;
     start_date?: string;
     end_date?: string;
     parent_path?: string;
@@ -28,7 +28,7 @@ export default function ProjectDialog({ title, project, types, statuses, onClose
   const [name, setName] = useState(project?.name ?? "");
   const [description, setDescription] = useState(project?.description ?? "");
   const [projectType, setProjectType] = useState(project?.project_type ?? "");
-  const [status, setStatus] = useState(project?.status ?? "planning");
+  const [status, setStatus] = useState<ProjectStatus>(project?.status ?? "planning");
   const [startDate, setStartDate] = useState(project?.start_date?.slice(0, 10) ?? getToday());
   const [endDate, setEndDate] = useState(project?.end_date?.slice(0, 10) ?? "");
   const [parentPath, setParentPath] = useState(
@@ -76,7 +76,7 @@ export default function ProjectDialog({ title, project, types, statuses, onClose
       }
     >
       {project && (
-        <div className="mb-4 text-[11px] font-mono tracking-wider" style={{ color: "var(--text-dim)" }}>
+        <div className="mb-4 text-[11px] tracking-wider" style={{ color: "var(--text-dim)" }}>
           编号：{project.project_number || "—"}
         </div>
       )}
@@ -102,7 +102,7 @@ export default function ProjectDialog({ title, project, types, statuses, onClose
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="text-[11px] mb-1.5 block font-mono tracking-wider" style={{ color: "var(--text-muted)" }}>
+            <label className="text-[11px] mb-1.5 block tracking-wider" style={{ color: "var(--text-muted)" }}>
               项目分类
             </label>
             <select
@@ -119,7 +119,7 @@ export default function ProjectDialog({ title, project, types, statuses, onClose
             </select>
           </div>
           <div>
-            <label className="text-[11px] mb-1.5 block font-mono tracking-wider" style={{ color: "var(--text-muted)" }}>
+            <label className="text-[11px] mb-1.5 block tracking-wider" style={{ color: "var(--text-muted)" }}>
               项目状态
             </label>
             <select
@@ -138,7 +138,7 @@ export default function ProjectDialog({ title, project, types, statuses, onClose
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="text-[11px] mb-1.5 block font-mono tracking-wider" style={{ color: "var(--text-muted)" }}>
+            <label className="text-[11px] mb-1.5 block tracking-wider" style={{ color: "var(--text-muted)" }}>
               开始日期
             </label>
             <DatePicker
@@ -152,7 +152,7 @@ export default function ProjectDialog({ title, project, types, statuses, onClose
             />
           </div>
           <div>
-            <label className="text-[11px] mb-1.5 block font-mono tracking-wider" style={{ color: "var(--text-muted)" }}>
+            <label className="text-[11px] mb-1.5 block tracking-wider" style={{ color: "var(--text-muted)" }}>
               截止日期
             </label>
             <DatePicker
@@ -170,7 +170,7 @@ export default function ProjectDialog({ title, project, types, statuses, onClose
         {/* 项目文件夹位置 */}
         {!project && (
           <div>
-            <label className="text-[11px] mb-1.5 block font-mono tracking-wider" style={{ color: "var(--text-muted)" }}>
+            <label className="text-[11px] mb-1.5 block tracking-wider" style={{ color: "var(--text-muted)" }}>
               项目文件夹位置（可选）
             </label>
             <div className="flex items-center gap-2">

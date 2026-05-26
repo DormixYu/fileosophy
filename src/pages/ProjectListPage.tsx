@@ -255,10 +255,9 @@ export default function ProjectListPage() {
       <div className="flex items-start justify-between mb-5 shrink-0">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-title font-serif" style={{ color: "var(--text-primary)" }}>
+            <h1 className="text-title" style={{ color: "var(--text-primary)" }}>
               项目
             </h1>
-            <div className="w-6 h-[2px] rounded-full" style={{ background: "var(--gold)", opacity: 0.6 }} />
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -457,7 +456,7 @@ export default function ProjectListPage() {
             boxShadow: "var(--shadow-gold-lg)",
           }}
         >
-          <span className="text-xs font-mono" style={{ color: "var(--gold)" }}>
+          <span className="text-xs" style={{ color: "var(--gold)" }}>
             已选 {selectedIds.size} 项
           </span>
           <button

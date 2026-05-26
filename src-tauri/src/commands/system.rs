@@ -1,6 +1,8 @@
 use tauri::AppHandle;
 use tauri::Manager;
 
+use super::utils::check_path_safe;
+
 #[tauri::command]
 pub fn open_user_guide(app: AppHandle) -> Result<(), String> {
     let resource_dir = app.path().resource_dir().map_err(|e| e.to_string())?;
@@ -60,14 +62,7 @@ pub fn open_folder(path: String) -> Result<(), String> {
         return Err("路径不是目录".to_string());
     }
 
-    // 禁止含 shell 元字符和控制字符的路径（防止命令注入）
-    if path.contains('&') || path.contains('|') || path.contains(';')
-        || path.contains('^') || path.contains('%') || path.contains('<')
-        || path.contains('>') || path.contains('!') || path.contains('"')
-        || path.contains('\n') || path.contains('\r')
-    {
-        return Err("路径包含非法字符".to_string());
-    }
+    check_path_safe(&path)?;
 
     #[cfg(target_os = "windows")]
     {
@@ -99,14 +94,7 @@ pub fn open_file(path: String) -> Result<(), String> {
     if !p.exists() {
         return Err("文件或文件夹不存在".to_string());
     }
-    // 禁止含 shell 元字符和控制字符的路径（防止命令注入）
-    if path.contains('&') || path.contains('|') || path.contains(';')
-        || path.contains('^') || path.contains('%') || path.contains('<')
-        || path.contains('>') || path.contains('!') || path.contains('"')
-        || path.contains('\n') || path.contains('\r')
-    {
-        return Err("路径包含非法字符".to_string());
-    }
+    check_path_safe(&path)?;
     #[cfg(target_os = "windows")]
     {
         std::process::Command::new("cmd")

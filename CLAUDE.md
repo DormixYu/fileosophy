@@ -66,9 +66,17 @@ LLM 经常默默选择一种解释然后执行。这个原则强制明确推理�
 3. [步骤] → 验证: [检查]
 ```
 
+## 环境要求
+
+- Node.js ≥ 18
+- Rust ≥ 1.70（通过 rustup 安装）
+
 ## 构建与运行
 
 ```bash
+# 安装前端依赖（首次）
+npm install
+
 # 仅启动前端开发服务器（端口 1420）
 npm run dev
 
@@ -86,10 +94,10 @@ npm run lint:fix
 npm run format
 npm run format:check
 
-# 生产构建
+# 生产构建（产物位于 src-tauri/target/release/bundle/）
 npm run tauri build
 
-# Rust：仅编译后端
+# Rust：仅编译后端（crate 名称：fileosophy_lib）
 cd src-tauri && cargo build
 
 # Rust：运行测试
@@ -228,7 +236,7 @@ project_milestones(id INTEGER PK AUTOINCREMENT, project_id INTEGER FK CASCADE, n
 
 ## 品牌设计系统
 
-品牌规范来源：`D:\Users\202536786\Desktop\品牌设计.html`。所有 UI 变更必须遵循该规范。
+所有 UI 变更必须遵循以下品牌规范。
 
 ### 品牌名
 
@@ -268,4 +276,10 @@ SVG 图形标识：文档轮廓（圆角矩形 + 折角）+ 三行文字线 + �
 
 ### Tailwind CSS 配置
 
-暗色模式通过 `class` 策略切换。自定义颜色（`gold-*`、`warm-*`、`parchment-*`、`void-*`、`ink-*`）在 `tailwind.config.js` 中定义，色值必须与上述品牌规范一致。自定义阴影（`gold`、`gold-lg`）和动画（`slide-up`、`scale-in`、`fade-in`）。
+暗色模式通过 `class` 策略切换。自定义颜色（`gold-*`、`warm-*`、`parchment-*`、`void-*`、`surface-*`、`ink-*`）在 `tailwind.config.js` 中定义，色值必须与上述品牌规范一致。自定义阴影（`gold`、`gold-lg`）和动画（`slide-up`、`scale-in`、`fade-in`）。
+
+## 窗口与安全
+
+- 窗口尺寸：1200×750（最小 1024×600）
+- CSP 限制：禁止外部资源加载，仅允许 `self`、`asset:`、`ipc:`、`data:`（图片）
+- 资源协议范围：`$APPDATA/**`（用于访问用户数据文件）

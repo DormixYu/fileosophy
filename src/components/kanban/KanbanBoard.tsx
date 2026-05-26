@@ -15,11 +15,12 @@ import { Plus, Link2, Unlink } from "lucide-react";
 import Spinner from "@/components/common/Spinner";
 import { useKanbanStore } from "@/stores/useKanbanStore";
 import { useGanttStore } from "@/stores/useGanttStore";
+import { useNotificationStore } from "@/stores/useNotificationStore";
 import type { KanbanCard as CardType } from "@/types";
 import { kanbanApi, ganttApi } from "@/lib/tauri-api";
 import { getToday } from "@/lib/ganttUtils";
 import DatePicker from "@/components/common/DatePicker";
-import Modal from "@/components/common/Modal";
+import Modal, { ConfirmDialog } from "@/components/common/Modal";
 import KanbanColumn from "./KanbanColumn";
 
 interface Props {
@@ -29,6 +30,7 @@ interface Props {
 export default function KanbanBoard({ projectId }: Props) {
   const { board, fetchBoard, addColumn, moveCard, updateCard, deleteCard, createCard } = useKanbanStore();
   const { fetchTasks } = useGanttStore();
+  const { addToast } = useNotificationStore();
   const [newColumnTitle, setNewColumnTitle] = useState("");
   const [showAddColumn, setShowAddColumn] = useState(false);
 
@@ -52,6 +54,10 @@ export default function KanbanBoard({ projectId }: Props) {
   const [linkName, setLinkName] = useState("");
   const [linkStartDate, setLinkStartDate] = useState("");
   const [linkDuration, setLinkDuration] = useState("1");
+
+  // 删除确认
+  const [deletingCardId, setDeletingCardId] = useState<number | null>(null);
+  const [confirmUnlink, setConfirmUnlink] = useState(false);
 
   useEffect(() => {
     fetchBoard(projectId);
@@ -87,40 +93,48 @@ export default function KanbanBoard({ projectId }: Props) {
 
   const handleAddColumn = async () => {
     if (!newColumnTitle.trim()) return;
-    await addColumn({ project_id: projectId, title: newColumnTitle.trim() });
-    setNewColumnTitle("");
-    setShowAddColumn(false);
+    try {
+      await addColumn({ project_id: projectId, title: newColumnTitle.trim() });
+      setNewColumnTitle("");
+      setShowAddColumn(false);
+    } catch (e) {
+      addToast({ type: "error", title: "添加列失败", message: String(e) });
+    }
   };
 
   // 添加任务
   const handleAddTask = async () => {
     if (!addTaskName.trim() || !addTaskColumnId) return;
-    if (addTaskSyncGantt) {
-      const task = await ganttApi.addTask({
-        project_id: projectId,
-        name: addTaskName.trim(),
-        start_date: addTaskStartDate,
-        duration_days: addTaskDuration,
-        dependencies: [],
-      });
-      if (task) {
+    try {
+      if (addTaskSyncGantt) {
+        const task = await ganttApi.addTask({
+          project_id: projectId,
+          name: addTaskName.trim(),
+          start_date: addTaskStartDate,
+          duration_days: addTaskDuration,
+          dependencies: [],
+        });
+        if (task) {
+          await createCard({
+            column_id: addTaskColumnId,
+            title: addTaskName.trim(),
+            description: addTaskDescription || undefined,
+            due_date: addTaskStartDate || undefined,
+            gantt_task_id: task.id,
+          });
+          fetchTasks(projectId);
+        }
+      } else {
         await createCard({
           column_id: addTaskColumnId,
           title: addTaskName.trim(),
           description: addTaskDescription || undefined,
-          due_date: addTaskStartDate || undefined,
-          gantt_task_id: task.id,
         });
-        fetchTasks(projectId);
       }
-    } else {
-      await createCard({
-        column_id: addTaskColumnId,
-        title: addTaskName.trim(),
-        description: addTaskDescription || undefined,
-      });
+      resetAddTaskForm();
+    } catch (e) {
+      addToast({ type: "error", title: "添加任务失败", message: String(e) });
     }
-    resetAddTaskForm();
   };
 
   const resetAddTaskForm = () => {
@@ -155,38 +169,63 @@ export default function KanbanBoard({ projectId }: Props) {
 
   const handleSaveCard = async () => {
     if (!editingCard || !editTitle.trim()) return;
-    const tags = editTags
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean);
-    await updateCard(editingCard.id, {
-      title: editTitle.trim(),
-      description: editDescription || null,
-      tags,
-      due_date: editDueDate || null,
-    } as Parameters<typeof updateCard>[1]);
-    setEditingCard(null);
+    try {
+      const tags = editTags
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean);
+      await updateCard(editingCard.id, {
+        title: editTitle.trim(),
+        description: editDescription || null,
+        tags,
+        due_date: editDueDate || null,
+      } as Parameters<typeof updateCard>[1]);
+      setEditingCard(null);
+    } catch (e) {
+      addToast({ type: "error", title: "保存卡片失败", message: String(e) });
+    }
   };
 
   // 甘特关联
   const handleLinkToGantt = async () => {
     if (!editingCard || !linkName.trim() || !linkStartDate) return;
-    await kanbanApi.linkCardToGantt(editingCard.id, linkName.trim(), linkStartDate, parseInt(linkDuration) || 1);
-    fetchBoard(projectId);
-    fetchTasks(projectId);
-    setEditingCard(null);
+    try {
+      await kanbanApi.linkCardToGantt(editingCard.id, linkName.trim(), linkStartDate, parseInt(linkDuration) || 1);
+      fetchBoard(projectId);
+      fetchTasks(projectId);
+      setEditingCard(null);
+    } catch (e) {
+      addToast({ type: "error", title: "关联甘特图失败", message: String(e) });
+    }
   };
 
-  const handleUnlinkFromGantt = async () => {
+  const handleUnlinkFromGantt = () => {
     if (!editingCard) return;
-    await kanbanApi.unlinkCardFromGantt(editingCard.id);
-    fetchBoard(projectId);
-    setEditingCard(null);
+    setConfirmUnlink(true);
+  };
+
+  const confirmUnlinkFromGantt = async () => {
+    if (!editingCard) return;
+    try {
+      await kanbanApi.unlinkCardFromGantt(editingCard.id);
+      fetchBoard(projectId);
+      setEditingCard(null);
+    } catch (e) {
+      addToast({ type: "error", title: "解除关联失败", message: String(e) });
+    } finally {
+      setConfirmUnlink(false);
+    }
   };
 
   const handleDeleteCard = (cardId: number) => {
-    deleteCard(cardId);
-    if (editingCard?.id === cardId) setEditingCard(null);
+    setDeletingCardId(cardId);
+  };
+
+  const confirmDeleteCard = () => {
+    if (deletingCardId === null) return;
+    deleteCard(deletingCardId);
+    if (editingCard?.id === deletingCardId) setEditingCard(null);
+    setDeletingCardId(null);
   };
 
   if (!board) {
@@ -469,6 +508,25 @@ export default function KanbanBoard({ projectId }: Props) {
           </label>
         </div>
       </Modal>
+
+      <ConfirmDialog
+        open={deletingCardId !== null}
+        title="删除卡片"
+        message="确定删除此卡片？删除后无法恢复。"
+        confirmLabel="删除"
+        danger
+        onConfirm={confirmDeleteCard}
+        onClose={() => setDeletingCardId(null)}
+      />
+
+      <ConfirmDialog
+        open={confirmUnlink}
+        title="解除甘特图关联"
+        message="确定解除此卡片与甘特图任务的关联？甘特图任务将保留，但卡片将不再同步进度。"
+        confirmLabel="解除关联"
+        onConfirm={confirmUnlinkFromGantt}
+        onClose={() => setConfirmUnlink(false)}
+      />
     </>
   );
 }

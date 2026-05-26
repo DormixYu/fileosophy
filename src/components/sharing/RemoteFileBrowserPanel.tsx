@@ -137,7 +137,7 @@ export default function RemoteFileBrowserPanel({
 
       {/* 面包屑导航 */}
       <div
-        className="flex items-center gap-1.5 text-xs font-mono px-3 py-2 rounded-lg"
+        className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg"
         style={{
           background: "var(--bg-surface-alt)",
           border: "1px solid var(--border-light)",
@@ -226,7 +226,7 @@ export default function RemoteFileBrowserPanel({
           )}
           {entries.length === 0 && !error ? (
             <div
-              className="text-xs py-4 text-center font-serif"
+              className="text-xs py-4 text-center "
               style={{ color: "var(--text-muted)" }}
             >
               空文件夹

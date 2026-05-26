@@ -4,6 +4,7 @@ use crate::commands::utils::get_setting;
 use crate::db::models::{FileEntry, FileEntryWithContent, GanttTask, KanbanCard, KanbanColumn, ProjectExport};
 use base64::{Engine, engine::general_purpose::STANDARD};
 use std::collections::HashMap;
+use std::fs;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 fn load_kanban_columns(conn: &rusqlite::Connection, project_id: i64) -> Result<Vec<KanbanColumn>, String> {
@@ -125,6 +126,36 @@ fn load_project_files(conn: &rusqlite::Connection, project_id: i64) -> Result<Ve
     Ok(files)
 }
 
+/// 加载项目文件的 base64 内容（用于导出）
+fn load_files_with_content(
+    files: &[FileEntry],
+    app_data_dir: &std::path::Path,
+    project_id: i64,
+) -> Option<Vec<FileEntryWithContent>> {
+    if files.is_empty() {
+        return None;
+    }
+    let files_dir = app_data_dir.join("files").join(project_id.to_string());
+    let content_list: Vec<FileEntryWithContent> = files.iter().map(|f| {
+        let file_path = files_dir.join(&f.stored_name);
+        let content_base64 = if file_path.exists() {
+            std::fs::read(&file_path).ok().map(|bytes| STANDARD.encode(&bytes))
+        } else {
+            None
+        };
+        FileEntryWithContent {
+            id: f.id,
+            project_id: f.project_id,
+            original_name: f.original_name.clone(),
+            stored_name: f.stored_name.clone(),
+            size: f.size,
+            uploaded_at: f.uploaded_at.clone(),
+            content_base64,
+        }
+    }).collect();
+    Some(content_list)
+}
+
 /// 导出项目为 JSON（完整数据）或 CSV（摘要），可选包含文件内容
 #[tauri::command]
 pub fn export_project(
@@ -150,46 +181,8 @@ pub fn export_project(
 
     let include_files_content = include_files.unwrap_or(false);
     let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
-    let files_with_content = if include_files_content && !files.is_empty() {
-        let files_dir = app_data_dir.join("files").join(project_id.to_string());
-        let mut content_list = Vec::new();
-        for f in &files {
-            let file_path = files_dir.join(&f.stored_name);
-            if file_path.exists() {
-                if let Ok(bytes) = std::fs::read(&file_path) {
-                    content_list.push(FileEntryWithContent {
-                        id: f.id,
-                        project_id: f.project_id,
-                        original_name: f.original_name.clone(),
-                        stored_name: f.stored_name.clone(),
-                        size: f.size,
-                        uploaded_at: f.uploaded_at.clone(),
-                        content_base64: Some(STANDARD.encode(&bytes)),
-                    });
-                } else {
-                    content_list.push(FileEntryWithContent {
-                        id: f.id,
-                        project_id: f.project_id,
-                        original_name: f.original_name.clone(),
-                        stored_name: f.stored_name.clone(),
-                        size: f.size,
-                        uploaded_at: f.uploaded_at.clone(),
-                        content_base64: None,
-                    });
-                }
-            } else {
-                content_list.push(FileEntryWithContent {
-                    id: f.id,
-                    project_id: f.project_id,
-                    original_name: f.original_name.clone(),
-                    stored_name: f.stored_name.clone(),
-                    size: f.size,
-                    uploaded_at: f.uploaded_at.clone(),
-                    content_base64: None,
-                });
-            }
-        }
-        Some(content_list)
+    let files_with_content = if include_files_content {
+        load_files_with_content(&files, &app_data_dir, project_id)
     } else {
         None
     };
@@ -360,25 +353,28 @@ pub fn export_all_projects(
     db: State<'_, DbConn>,
     include_files: Option<bool>,
 ) -> Result<String, String> {
-    let conn = db.lock().map_err(|e| e.to_string())?;
-
-    let mut stmt = conn
-        .prepare(&format!("SELECT id FROM projects ORDER BY updated_at DESC"))
-        .map_err(|e| e.to_string())?;
-
-    let project_ids: Vec<i64> = stmt
-        .query_map([], |row| row.get::<_, i64>(0))
-        .map_err(|e| e.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?;
-
-    drop(stmt);
+    // 先收集所有项目 ID，尽快释放锁
+    let project_ids: Vec<i64> = {
+        let conn = db.lock().map_err(|e| e.to_string())?;
+        let mut stmt = conn
+            .prepare("SELECT id FROM projects ORDER BY updated_at DESC")
+            .map_err(|e| e.to_string())?;
+        let ids: Vec<i64> = stmt
+            .query_map([], |row| row.get::<_, i64>(0))
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+        ids
+    };
 
     let include_files_content = include_files.unwrap_or(false);
     let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
 
+    // 逐个项目加载数据，每次独立加锁
     let mut exports = Vec::new();
     for pid in project_ids {
+        let conn = db.lock().map_err(|e| e.to_string())?;
+
         let project = conn
             .query_row(
                 &format!("SELECT {PROJECT_COLUMNS} FROM projects WHERE id = ?1"),
@@ -391,46 +387,10 @@ pub fn export_all_projects(
         let gantt_tasks = load_gantt_tasks(&conn, pid)?;
         let files = load_project_files(&conn, pid)?;
 
-        let files_with_content = if include_files_content && !files.is_empty() {
-            let files_dir = app_data_dir.join("files").join(pid.to_string());
-            let mut content_list = Vec::new();
-            for f in &files {
-                let file_path = files_dir.join(&f.stored_name);
-                if file_path.exists() {
-                    if let Ok(bytes) = std::fs::read(&file_path) {
-                        content_list.push(FileEntryWithContent {
-                            id: f.id,
-                            project_id: f.project_id,
-                            original_name: f.original_name.clone(),
-                            stored_name: f.stored_name.clone(),
-                            size: f.size,
-                            uploaded_at: f.uploaded_at.clone(),
-                            content_base64: Some(STANDARD.encode(&bytes)),
-                        });
-                    } else {
-                        content_list.push(FileEntryWithContent {
-                            id: f.id,
-                            project_id: f.project_id,
-                            original_name: f.original_name.clone(),
-                            stored_name: f.stored_name.clone(),
-                            size: f.size,
-                            uploaded_at: f.uploaded_at.clone(),
-                            content_base64: None,
-                        });
-                    }
-                } else {
-                    content_list.push(FileEntryWithContent {
-                        id: f.id,
-                        project_id: f.project_id,
-                        original_name: f.original_name.clone(),
-                        stored_name: f.stored_name.clone(),
-                        size: f.size,
-                        uploaded_at: f.uploaded_at.clone(),
-                        content_base64: None,
-                    });
-                }
-            }
-            Some(content_list)
+        drop(conn); // 释放锁后再读取文件内容
+
+        let files_with_content = if include_files_content {
+            load_files_with_content(&files, &app_data_dir, pid)
         } else {
             None
         };
@@ -456,29 +416,55 @@ pub fn import_all_projects(app: AppHandle, db: State<'_, DbConn>, file_path: Str
         serde_json::from_str(&content).map_err(|e| format!("无法解析备份文件: {e}"))?;
 
     let do_replace = replace.unwrap_or(false);
-
-    if do_replace {
-        let conn = db.lock().map_err(|e| e.to_string())?;
-        conn.execute_batch(
-            "DELETE FROM kanban_cards; DELETE FROM kanban_columns; DELETE FROM gantt_tasks; DELETE FROM project_files; DELETE FROM project_status_history; DELETE FROM project_milestones; DELETE FROM projects;"
-        ).map_err(|e| format!("清空数据失败: {e}"))?;
-    }
-
     let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
 
-    let mut imported = Vec::new();
-    for export in exports {
-        let conn = db.lock().map_err(|e| e.to_string())?;
-        let project = import_full_project_impl(&conn, export)?;
+    let conn = db.lock().map_err(|e| e.to_string())?;
 
-        // 如果备份包含文件内容，写入实际文件
-        let _ = app_data_dir; // 用于后续文件内容还原
-        // TODO: 处理 files_with_content 中的 base64 文件内容写入
+    // 使用事务确保原子性
+    conn.execute_batch("BEGIN TRANSACTION").map_err(|e| e.to_string())?;
 
-imported.push(project);
+    let result = (|| -> Result<Vec<crate::db::models::Project>, String> {
+        if do_replace {
+            conn.execute_batch(
+                "DELETE FROM kanban_cards; DELETE FROM kanban_columns; DELETE FROM gantt_tasks; DELETE FROM project_files; DELETE FROM project_status_history; DELETE FROM project_milestones; DELETE FROM projects;"
+            ).map_err(|e| format!("清空数据失败: {e}"))?;
+        }
+
+        let mut imported = Vec::new();
+        for export in exports {
+            let files_content = export.files_with_content.clone();
+            let project = import_full_project_impl(&conn, export)?;
+
+            // 将 base64 文件内容写入磁盘
+            if let Some(files) = files_content {
+                let files_dir = app_data_dir.join("files").join(project.id.to_string());
+                fs::create_dir_all(&files_dir).map_err(|e| format!("创建文件目录失败: {e}"))?;
+                for file in &files {
+                    if let Some(ref content_b64) = file.content_base64 {
+                        if let Ok(bytes) = STANDARD.decode(content_b64) {
+                            let file_path = files_dir.join(&file.stored_name);
+                            fs::write(&file_path, &bytes).map_err(|e| format!("写入文件失败: {e}"))?;
+                        }
+                    }
+                }
+            }
+
+            imported.push(project);
+        }
+
+        Ok(imported)
+    })();
+
+    match result {
+        Ok(imported) => {
+            conn.execute_batch("COMMIT").map_err(|e| e.to_string())?;
+            Ok(imported)
+        }
+        Err(e) => {
+            conn.execute_batch("ROLLBACK").ok();
+            Err(e)
+        }
     }
-
-    Ok(imported)
 }
 
 /// CSV 值中含逗号、引号、换行的要用双引号包裹并转义内部引号

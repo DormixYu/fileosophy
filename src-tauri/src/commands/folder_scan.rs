@@ -160,6 +160,13 @@ pub fn scan_project_folders(db: State<'_, DbConn>, parent_path: String) -> Resul
 
     let mut results = Vec::new();
 
+    // 预编译日期清理正则（避免循环内重复编译）
+    let date_patterns: Vec<Regex> = [
+        r"\d{4}[-./]\d{2}[-./]\d{2}",
+        r"\d{8}",
+        r"\d{6}",
+    ].iter().filter_map(|p| Regex::new(p).ok()).collect();
+
     for entry in entries.flatten() {
         let path = entry.path();
         if !path.is_dir() {
@@ -266,12 +273,7 @@ pub fn scan_project_folders(db: State<'_, DbConn>, parent_path: String) -> Resul
                 }
             }
             // 去掉常见日期格式
-            let date_patterns = [
-                Regex::new(r"\d{4}[-./]\d{2}[-./]\d{2}").ok(),
-                Regex::new(r"\d{8}").ok(),
-                Regex::new(r"\d{6}").ok(),
-            ];
-            for pat in date_patterns.into_iter().flatten() {
+            for pat in &date_patterns {
                 clean_name = pat.replace(&clean_name, "").to_string();
             }
             // 去掉匹配的关键词（大小写不敏感）

@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Pencil, Clock, Calendar, FolderOpen } from "lucide-react";
 import { useProjectStore } from "@/stores/useProjectStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 import { projectApi } from "@/lib/tauri-api";
-import Modal from "@/components/common/Modal";
+import ProjectDialog from "@/components/project/ProjectDialog";
 import FileExplorer from "@/components/files/FileExplorer";
 import FilePanel from "@/components/files/FilePanel";
 import Spinner from "@/components/common/Spinner";
@@ -15,15 +15,16 @@ import { formatDate, formatDateTime } from "@/lib/formatUtils";
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const projectId = Number(id);
   const { currentProject, fetchProjectById, updateProject, loading } =
     useProjectStore();
   const { parsedStatuses, parsedTypes } = useSettingsStore();
 
   const [showEdit, setShowEdit] = useState(false);
-  const [editName, setEditName] = useState("");
-  const [editDescription, setEditDescription] = useState("");
-  const [activeView, setActiveView] = useState<"detail" | "kanban" | "gantt">("detail");
+  const tabParam = searchParams.get("tab");
+  const initialTab = tabParam === "kanban" || tabParam === "gantt" ? tabParam : "detail";
+  const [activeView, setActiveView] = useState<"detail" | "kanban" | "gantt">(initialTab);
 
   useEffect(() => {
     if (projectId && !isNaN(projectId)) fetchProjectById(projectId);
@@ -31,6 +32,13 @@ export default function ProjectDetailPage() {
       // 仅组件卸载时清理，避免项目间切换时闪烁
     };
   }, [projectId, fetchProjectById]);
+
+  // 响应 URL 中 tab 参数变化
+  useEffect(() => {
+    if (tabParam === "kanban" || tabParam === "gantt") {
+      setActiveView(tabParam);
+    }
+  }, [tabParam]);
 
   if (loading) {
     return (
@@ -42,22 +50,32 @@ export default function ProjectDetailPage() {
 
   if (!id || isNaN(projectId)) {
     return (
-      <div
-        className="flex items-center justify-center h-full text-sm"
-        style={{ color: "var(--text-muted)" }}
-      >
-        无效的项目 ID
+      <div className="flex flex-col items-center justify-center h-full gap-3">
+        <span className="text-sm" style={{ color: "var(--text-muted)" }}>
+          无效的项目 ID
+        </span>
+        <button
+          className="btn btn-ghost btn-sm"
+          onClick={() => navigate("/projects")}
+        >
+          返回项目列表
+        </button>
       </div>
     );
   }
 
   if (!currentProject) {
     return (
-      <div
-        className="flex items-center justify-center h-full text-sm"
-        style={{ color: "var(--text-muted)" }}
-      >
-        项目不存在
+      <div className="flex flex-col items-center justify-center h-full gap-3">
+        <span className="text-sm" style={{ color: "var(--text-muted)" }}>
+          项目不存在
+        </span>
+        <button
+          className="btn btn-ghost btn-sm"
+          onClick={() => navigate("/projects")}
+        >
+          返回项目列表
+        </button>
       </div>
     );
   }
@@ -75,7 +93,7 @@ export default function ProjectDetailPage() {
         }}
       >
         <button
-          onClick={() => navigate("/projects")}
+          onClick={() => navigate(-1)}
           className="p-1.5 rounded-md transition-colors hover-gold-bg"
           style={{ color: "var(--text-secondary)" }}
           aria-label="返回"
@@ -84,21 +102,16 @@ export default function ProjectDetailPage() {
         </button>
         <div className="flex-1 min-w-0 flex items-center gap-3">
           <h1
-            className="text-title font-serif truncate"
+            className="text-title truncate"
             style={{ color: "var(--text-primary)" }}
           >
             {currentProject.name}
           </h1>
-          <div className="w-6 h-[2px] rounded-full shrink-0" style={{ background: "var(--gold)", opacity: 0.6 }} />
           <button
             className="p-1 rounded-md transition-colors flex-shrink-0 hover-gold-bg"
             style={{ color: "var(--text-secondary)" }}
             aria-label="编辑项目"
-            onClick={() => {
-              setEditName(currentProject.name);
-              setEditDescription(currentProject.description ?? "");
-              setShowEdit(true);
-            }}
+            onClick={() => setShowEdit(true)}
           >
             <Pencil size={14} strokeWidth={1.5} />
           </button>
@@ -110,24 +123,21 @@ export default function ProjectDetailPage() {
         className="flex items-center gap-1 px-6 h-10 shrink-0"
         style={{ background: "var(--bg-surface)" }}
       >
-        {([
-          { key: "detail", label: "项目详情" },
-          { key: "kanban", label: "项目看板" },
-          { key: "gantt", label: "项目甘特图" },
-        ] as const).map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveView(tab.key)}
-            className="px-3 py-1.5 text-xs rounded-md transition-all"
-            style={{
-              color: activeView === tab.key ? "var(--gold)" : "var(--text-secondary)",
-              background: activeView === tab.key ? "var(--gold-glow)" : "transparent",
-              borderBottom: activeView === tab.key ? "2px solid var(--gold)" : "2px solid transparent",
-            }}
-          >
-            {tab.label}
-          </button>
-        ))}
+        <div className="tab-group">
+          {([
+            { key: "detail", label: "项目详情" },
+            { key: "kanban", label: "项目看板" },
+            { key: "gantt", label: "项目甘特图" },
+          ] as const).map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveView(tab.key)}
+              className={`tab-item ${activeView === tab.key ? "active" : ""}`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
         {currentProject?.folder_path && (
           <button
             className="ml-auto btn btn-outline btn-sm hover-gold-text"
@@ -147,7 +157,7 @@ export default function ProjectDetailPage() {
         {/* 项目信息卡片 */}
         <div className="card">
           <h2
-            className="text-callout font-serif mb-4"
+            className="text-lg mb-4"
             style={{ color: "var(--text-primary)" }}
           >
             项目信息
@@ -172,7 +182,7 @@ export default function ProjectDetailPage() {
             {/* 项目状态 */}
             <div>
               <span
-                className="text-[11px] font-serif block mb-0.5"
+                className="text-[11px] block mb-0.5"
                 style={{ color: "var(--text-muted)" }}
               >
                 项目状态
@@ -232,7 +242,7 @@ export default function ProjectDetailPage() {
           {currentProject.description && (
             <div className="mt-4 pt-4 border-t" style={{ borderColor: "var(--border-light)" }}>
               <span
-                className="text-[11px] font-serif block mb-1"
+                className="text-[11px] block mb-1"
                 style={{ color: "var(--text-muted)" }}
               >
                 项目描述
@@ -247,7 +257,7 @@ export default function ProjectDetailPage() {
         {/* 文件列表 */}
         <div className="card">
           <h2
-            className="text-callout font-serif mb-4 flex items-center gap-2"
+            className="text-lg mb-4 flex items-center gap-2"
             style={{ color: "var(--text-primary)" }}
           >
             <FolderOpen size={16} strokeWidth={1.5} />
@@ -271,58 +281,19 @@ export default function ProjectDetailPage() {
         )}
       </div>
 
-      {/* 编辑项目 Modal */}
-      <Modal
-        open={showEdit}
-        onClose={() => setShowEdit(false)}
-        title="编辑项目"
-        footer={
-          <>
-            <button className="btn btn-ghost btn-sm" onClick={() => setShowEdit(false)}>
-              取消
-            </button>
-            <button
-              className="btn btn-primary btn-sm"
-              onClick={async () => {
-                if (!editName.trim()) return;
-                await updateProject(projectId, {
-                  name: editName.trim(),
-                  description: editDescription || undefined,
-                });
-                setShowEdit(false);
-              }}
-            >
-              保存
-            </button>
-          </>
-        }
-      >
-        <div className="space-y-3">
-          <div>
-            <label className="text-xs mb-1 block" style={{ color: "var(--text-muted)" }}>
-              项目名称
-            </label>
-            <input
-              type="text"
-              value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-              className="w-full input-base"
-              autoFocus
-            />
-          </div>
-          <div>
-            <label className="text-xs mb-1 block" style={{ color: "var(--text-muted)" }}>
-              项目描述
-            </label>
-            <textarea
-              value={editDescription}
-              onChange={(e) => setEditDescription(e.target.value)}
-              rows={3}
-              className="w-full input-base resize-none"
-            />
-          </div>
-        </div>
-      </Modal>
+      {showEdit && (
+        <ProjectDialog
+          title="编辑项目"
+          project={currentProject}
+          types={parsedTypes}
+          statuses={parsedStatuses}
+          onClose={() => setShowEdit(false)}
+          onSubmit={async (data) => {
+            await updateProject(projectId, data);
+            setShowEdit(false);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -339,7 +310,7 @@ function InfoItem({
   return (
     <div>
       <span
-        className="text-[11px] font-serif block mb-0.5"
+        className="text-[11px] block mb-0.5"
         style={{ color: "var(--text-muted)" }}
       >
         {label}

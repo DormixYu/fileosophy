@@ -1,5 +1,6 @@
 import { useEffect, useCallback } from "react";
 import Modal from "@/components/common/Modal";
+import { formatSize } from "@/lib/formatUtils";
 import {
   X,
   ChevronLeft,
@@ -54,12 +55,6 @@ export default function FilePreviewModal({
       return () => document.removeEventListener("keydown", handleKeyDown);
     }
   }, [open, handleKeyDown]);
-
-  const formatSize = (bytes: number): string => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
 
   const renderPreview = () => {
     if (loading) {
@@ -130,14 +125,14 @@ export default function FilePreviewModal({
           />
           <FileText size={16} strokeWidth={1.5} style={{ color: "var(--gold)", flexShrink: 0 }} />
           <span
-            className="text-sm font-serif truncate"
+            className="text-sm truncate"
             style={{ color: "var(--text-primary)" }}
           >
             {fileName}
           </span>
           {preview && (
             <span
-              className="text-xs shrink-0 font-mono"
+              className="text-xs shrink-0"
               style={{ color: "var(--text-muted)" }}
             >
               {formatSize(preview.size)}

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Bell,
@@ -12,7 +12,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { useNotificationStore } from "@/stores/useNotificationStore";
-import Modal from "@/components/common/Modal";
+import Modal, { ConfirmDialog } from "@/components/common/Modal";
 import { formatTimeRelative } from "@/lib/formatUtils";
 
 // 通知类型图标
@@ -47,6 +47,7 @@ export default function NotificationCenter({ open, onClose }: Props) {
     markAllRead,
     clearHistory,
   } = useNotificationStore();
+  const [confirmClear, setConfirmClear] = useState(false);
 
   useEffect(() => {
     if (open) fetchHistory();
@@ -63,6 +64,7 @@ export default function NotificationCenter({ open, onClose }: Props) {
   };
 
   return (
+    <>
     <Modal
       open={open}
       onClose={onClose}
@@ -82,7 +84,7 @@ export default function NotificationCenter({ open, onClose }: Props) {
             </button>
             <button
               className="btn btn-ghost btn-sm"
-              onClick={clearHistory}
+              onClick={() => setConfirmClear(true)}
               style={{ color: "var(--text-muted)" }}
             >
               <Trash2 size={12} strokeWidth={1.5} />
@@ -193,5 +195,19 @@ export default function NotificationCenter({ open, onClose }: Props) {
         </div>
       )}
     </Modal>
+
+    <ConfirmDialog
+      open={confirmClear}
+      title="清空通知历史"
+      message="确定清空所有通知历史？此操作无法撤销。"
+      confirmLabel="清空"
+      danger
+      onConfirm={() => {
+        clearHistory();
+        setConfirmClear(false);
+      }}
+      onClose={() => setConfirmClear(false)}
+    />
+    </>
   );
 }

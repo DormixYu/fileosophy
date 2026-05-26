@@ -302,5 +302,9 @@ fn unique_file_path(dir: &PathBuf, name: &str) -> PathBuf {
         }
     }
 
-    path
+    // 所有候选路径都已存在，返回错误而非覆盖
+    dir.join(format!("{stem}_conflict_{}{ext}", std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()))
 }

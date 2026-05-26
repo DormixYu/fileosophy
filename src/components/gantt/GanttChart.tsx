@@ -2,9 +2,10 @@ import { useEffect, useState, useMemo, useRef } from "react";
 import { Plus, Trash2, Crosshair } from "lucide-react";
 import { useGanttStore } from "@/stores/useGanttStore";
 import { useKanbanStore } from "@/stores/useKanbanStore";
+import { useNotificationStore } from "@/stores/useNotificationStore";
 import { kanbanApi } from "@/lib/tauri-api";
 import type { GanttTask } from "@/types";
-import Modal from "@/components/common/Modal";
+import Modal, { ConfirmDialog } from "@/components/common/Modal";
 import Spinner from "@/components/common/Spinner";
 import EmptyState from "@/components/common/EmptyState";
 import { ROW_HEIGHT, NAME_WIDTH, BAR_HEIGHT, BAR_TOP, daysBetween, addDays, getToday, formatLocalDate } from "@/lib/ganttUtils";
@@ -21,6 +22,7 @@ export default function GanttChart({ projectId }: Props) {
   const { tasks, fetchTasks, addTask, updateTask, deleteTask, loading } =
     useGanttStore();
   const { fetchBoard } = useKanbanStore();
+  const { addToast } = useNotificationStore();
   const containerRef = useRef<HTMLDivElement>(null);
 
   // 添加任务
@@ -40,6 +42,9 @@ export default function GanttChart({ projectId }: Props) {
   const [editDuration, setEditDuration] = useState(1);
   const [editProgress, setEditProgress] = useState(0);
   const [editDeps, setEditDeps] = useState<number[]>([]);
+
+  // 删除确认
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
     fetchTasks(projectId);
@@ -88,21 +93,31 @@ export default function GanttChart({ projectId }: Props) {
   // 保存编辑
   const handleSaveEdit = async () => {
     if (!editingTask || !editName.trim()) return;
-    await updateTask(editingTask.id, {
-      name: editName.trim(),
-      start_date: editStartDate,
-      duration_days: editDuration,
-      progress: editProgress / 100,
-      dependencies: editDeps,
-    });
-    setEditingTask(null);
+    try {
+      await updateTask(editingTask.id, {
+        name: editName.trim(),
+        start_date: editStartDate,
+        duration_days: editDuration,
+        progress: editProgress / 100,
+        dependencies: editDeps,
+      });
+      setEditingTask(null);
+    } catch (e) {
+      addToast({ type: "error", title: "保存失败", message: String(e) });
+    }
   };
 
   // 删除任务
-  const handleDeleteTask = async () => {
+  const handleDeleteTask = () => {
+    if (!editingTask) return;
+    setConfirmDelete(true);
+  };
+
+  const confirmDeleteTask = async () => {
     if (!editingTask) return;
     await deleteTask(editingTask.id);
     setEditingTask(null);
+    setConfirmDelete(false);
   };
 
   const hasTasks = tasks.length > 0;
@@ -154,10 +169,9 @@ export default function GanttChart({ projectId }: Props) {
   const header = (
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-2">
-        <h3 className="text-title font-serif" style={{ color: "var(--text-primary)" }}>
+        <h3 className="text-base" style={{ color: "var(--text-primary)" }}>
           甘特图
         </h3>
-        <span className="w-6 h-px" style={{ background: "var(--gold)" }} />
       </div>
       <div className="flex items-center gap-2">
         {hasTasks && (
@@ -224,7 +238,7 @@ export default function GanttChart({ projectId }: Props) {
                 {monthLabels.map((m, i) => (
                   <div
                     key={i}
-                    className="shrink-0 text-center text-[10px] font-serif font-medium py-1 border-r whitespace-nowrap overflow-hidden"
+                    className="shrink-0 text-center text-[10px] font-medium py-1 border-r whitespace-nowrap overflow-hidden"
                     style={{
                       width: m.span * DAY_WIDTH,
                       color: "var(--text-secondary)",
@@ -261,7 +275,7 @@ export default function GanttChart({ projectId }: Props) {
                   return (
                     <div
                       key={i}
-                      className="shrink-0 text-center text-[9px] font-mono py-0.5 border-r"
+                      className="shrink-0 text-center text-[9px] py-0.5 border-r"
                       style={{
                         width: DAY_WIDTH,
                         fontWeight: d === 1 ? 600 : 400,
@@ -552,6 +566,16 @@ export default function GanttChart({ projectId }: Props) {
           )}
         </div>
       </Modal>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        title="删除任务"
+        message="确定删除此甘特图任务？关联的看板卡片将解除关联，且操作无法撤销。"
+        confirmLabel="删除"
+        danger
+        onConfirm={confirmDeleteTask}
+        onClose={() => setConfirmDelete(false)}
+      />
     </div>
   );
 }

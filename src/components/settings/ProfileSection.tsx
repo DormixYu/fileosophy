@@ -104,13 +104,9 @@ export default function ProfileSection({ onDirtyChange }: { onDirtyChange?: (dir
     <section className="animate-slide-up">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <h2 className="text-title font-serif" style={{ color: "var(--text-primary)" }}>
+          <h2 className="text-lg" style={{ color: "var(--text-primary)" }}>
             用户资料
           </h2>
-          <div
-            className="w-8 h-[2px] rounded-full"
-            style={{ background: "var(--gold)", opacity: 0.5 }}
-          />
         </div>
         <button
           className="btn btn-primary btn-sm"
@@ -141,7 +137,7 @@ export default function ProfileSection({ onDirtyChange }: { onDirtyChange?: (dir
           </div>
         ) : (
           <div
-            className="w-20 h-20 rounded-full flex items-center justify-center text-xl font-serif"
+            className="w-20 h-20 rounded-full flex items-center justify-center text-xl font-medium"
             style={{
               background: "var(--gold-glow-strong)",
               color: "var(--gold)",
@@ -153,7 +149,7 @@ export default function ProfileSection({ onDirtyChange }: { onDirtyChange?: (dir
           </div>
         )}
         <div className="space-y-2">
-          <p className="text-sm font-serif" style={{ color: "var(--text-primary)" }}>
+          <p className="text-sm" style={{ color: "var(--text-primary)" }}>
             {user?.name || "未设置用户名"}
           </p>
           <div className="flex gap-2">
@@ -184,7 +180,7 @@ export default function ProfileSection({ onDirtyChange }: { onDirtyChange?: (dir
           className="mb-6 p-4 rounded-lg animate-slide-up"
           style={{ background: "var(--gold-glow)", border: "1px solid var(--gold)" }}
         >
-          <p className="text-xs font-serif mb-3" style={{ color: "var(--gold)" }}>
+          <p className="text-xs mb-3" style={{ color: "var(--gold)" }}>
             选择一个 Emoji 作为头像
           </p>
           <div className="grid grid-cols-8 gap-2">
@@ -208,7 +204,7 @@ export default function ProfileSection({ onDirtyChange }: { onDirtyChange?: (dir
 
       {/* 用户名输入：.input-base */}
       <div className="mb-6">
-        <label className="block text-xs mb-1.5 font-serif" style={{ color: "var(--text-muted)" }}>
+        <label className="block text-xs mb-1.5" style={{ color: "var(--text-muted)" }}>
           用户名
         </label>
         <input

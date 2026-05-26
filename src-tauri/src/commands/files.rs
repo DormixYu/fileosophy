@@ -45,6 +45,8 @@ pub fn list_project_files(
     Ok(files)
 }
 
+const MAX_FILE_SIZE: u64 = 100 * 1024 * 1024; // 100MB
+
 #[tauri::command]
 pub fn upload_file_to_project(
     app: AppHandle,
@@ -55,6 +57,11 @@ pub fn upload_file_to_project(
     let src = PathBuf::from(&file_path);
     if !src.exists() {
         return Err("源文件不存在".to_string());
+    }
+
+    let metadata = fs::metadata(&src).map_err(|e| e.to_string())?;
+    if metadata.len() > MAX_FILE_SIZE {
+        return Err(format!("文件大小超过限制（最大 {}MB）", MAX_FILE_SIZE / 1024 / 1024));
     }
 
     let original_name = src
@@ -111,8 +118,10 @@ pub fn upload_file_to_project(
         )
         .map_err(|e| e.to_string())?;
 
+    drop(conn); // 释放锁，避免 emit_notification_checked 内部二次加锁死锁
+
     // 通知前端文件已上传
-    events::emit_notification(&app, "success", "文件已上传", &entry.original_name, Some(&format!("/project/{}", project_id)));
+    events::emit_notification_checked(&app, db.inner(), "file_uploaded", "success", "文件已上传", &entry.original_name, Some(&format!("/project/{}", project_id)));
 
     Ok(entry)
 }
@@ -143,7 +152,9 @@ pub fn delete_file(app: AppHandle, db: State<'_, DbConn>, file_id: i64) -> Resul
         let _ = fs::remove_file(&file_path); // 磁盘文件删除失败不影响结果
     }
 
-    events::emit_notification(&app, "warning", "文件已删除", &original_name, None);
+    drop(conn); // 释放锁，避免 emit_notification_checked 内部二次加锁死锁
+
+    events::emit_notification_checked(&app, db.inner(), "file_deleted", "warning", "文件已删除", &original_name, None);
 
     Ok(())
 }
@@ -320,6 +331,10 @@ pub fn preview_file(
     // 图片类型 → base64 data URL
     let image_exts = ["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "ico"];
     if image_exts.contains(&ext.as_str()) {
+        const MAX_PREVIEW_IMAGE_SIZE: i64 = 10 * 1024 * 1024; // 10MB
+        if size > MAX_PREVIEW_IMAGE_SIZE {
+            return Err(format!("图片文件过大（{}MB），无法预览（最大 {}MB）", size / 1024 / 1024, MAX_PREVIEW_IMAGE_SIZE / 1024 / 1024));
+        }
         let mime = match ext.as_str() {
             "jpg" | "jpeg" => "image/jpeg",
             "png" => "image/png",
@@ -341,8 +356,17 @@ pub fn preview_file(
 
     // Markdown → 返回原始文本，mime 标记为 text/markdown
     if ext == "md" {
-        let content = std::fs::read_to_string(&file_path)
-            .map_err(|e| format!("无法读取文件内容: {}", e))?;
+        const MAX_TEXT_PREVIEW_SIZE: i64 = 5 * 1024 * 1024; // 5MB
+        let content = if size > MAX_TEXT_PREVIEW_SIZE {
+            // 大文件仅读取前 512KB，避免 OOM
+            use std::io::Read;
+            let mut file = std::fs::File::open(&file_path).map_err(|e| format!("无法读取文件内容: {}", e))?;
+            let mut buf = vec![0u8; 512_000];
+            let n = file.read(&mut buf).map_err(|e| format!("无法读取文件内容: {}", e))?;
+            String::from_utf8_lossy(&buf[..n]).to_string()
+        } else {
+            std::fs::read_to_string(&file_path).map_err(|e| format!("无法读取文件内容: {}", e))?
+        };
         let truncated = truncate_text(content, 512_000);
         return Ok(FilePreview {
             mime_type: "text/markdown".to_string(),
@@ -355,8 +379,16 @@ pub fn preview_file(
     // 文本类型 → 返回文本内容
     let text_exts = ["txt", "json", "xml", "csv", "log", "yaml", "yml", "toml", "ini", "cfg", "conf", "rs", "ts", "tsx", "js", "jsx", "py", "html", "css", "sql", "sh", "bat", "ps1", "env"];
     if text_exts.contains(&ext.as_str()) {
-        let content = std::fs::read_to_string(&file_path)
-            .map_err(|e| format!("无法读取文件内容: {}", e))?;
+        const MAX_TEXT_PREVIEW_SIZE: i64 = 5 * 1024 * 1024; // 5MB
+        let content = if size > MAX_TEXT_PREVIEW_SIZE {
+            use std::io::Read;
+            let mut file = std::fs::File::open(&file_path).map_err(|e| format!("无法读取文件内容: {}", e))?;
+            let mut buf = vec![0u8; 512_000];
+            let n = file.read(&mut buf).map_err(|e| format!("无法读取文件内容: {}", e))?;
+            String::from_utf8_lossy(&buf[..n]).to_string()
+        } else {
+            std::fs::read_to_string(&file_path).map_err(|e| format!("无法读取文件内容: {}", e))?
+        };
         let truncated = truncate_text(content, 512_000);
 
         let mime = match ext.as_str() {

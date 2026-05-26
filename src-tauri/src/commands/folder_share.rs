@@ -1,4 +1,6 @@
-use crate::commands::utils::{hex_encode, read_json_frame, send_json_frame, set_stream_timeout};
+use crate::commands::files::MdnsState;
+use crate::commands::utils::{hex_encode, read_json_frame, send_json_frame, set_stream_timeout, encode_password, decode_password};
+use crate::db::DbConn;
 use crate::events;
 use serde::{Deserialize, Serialize};
 use sha2::{Sha256, Digest};
@@ -11,7 +13,7 @@ use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 use std::thread;
 use std::time::Duration;
-use tauri::State;
+use tauri::{Manager, State};
 
 /// 最大并发连接数
 const MAX_SHARE_CONNECTIONS: u32 = 10;
@@ -22,13 +24,15 @@ const MAX_SHARE_CONNECTIONS: u32 = 10;
 #[serde(tag = "type")]
 enum ShareRequest {
     #[serde(rename = "auth")]
-    Auth { password_hash: String },
+    Auth { password_hash: String, username: Option<String> },
     #[serde(rename = "list_dir")]
     ListDir { path: String },
     #[serde(rename = "download")]
     Download { path: String },
     #[serde(rename = "upload")]
     Upload { path: String, file_name: String, file_size: u64 },
+    #[serde(rename = "project_info")]
+    ProjectInfo,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -51,6 +55,15 @@ enum ServerResponse {
     DownloadHeader { file_name: String, file_size: u64, sha256_hash: String },
     #[serde(rename = "upload_ack")]
     UploadAck { accepted: bool, reason: Option<String> },
+    #[serde(rename = "project_info")]
+    ProjectInfo {
+        project_name: String,
+        owner: String,
+        description: Option<String>,
+        status: Option<String>,
+        start_date: Option<String>,
+        end_date: Option<String>,
+    },
 }
 
 // ── 活动日志 ──────────────────────────────────────────────────
@@ -68,12 +81,23 @@ const MAX_ACTIVITY_LOG: usize = 100;
 
 // ── 服务器 ────────────────────────────────────────────────────
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ShareProjectMeta {
+    pub project_name: String,
+    pub owner: String,
+    pub description: Option<String>,
+    pub status: Option<String>,
+    pub start_date: Option<String>,
+    pub end_date: Option<String>,
+}
+
 pub struct FolderShareServer {
     port: u16,
     running: Arc<AtomicBool>,
     root_path: PathBuf,
     clients: Arc<Mutex<Vec<ClientInfo>>>,
     activity_log: Arc<Mutex<Vec<ActivityLogEntry>>>,
+    project_meta: Option<ShareProjectMeta>,
     #[allow(dead_code)]
     connection_count: Arc<AtomicU32>,
 }
@@ -85,7 +109,7 @@ pub struct ClientInfo {
 }
 
 impl FolderShareServer {
-    pub fn start(root_path: String, password: String) -> Result<Self, String> {
+    pub fn start(root_path: String, password: String, project_meta: Option<ShareProjectMeta>) -> Result<Self, String> {
         let path = PathBuf::from(&root_path);
         if !path.is_dir() {
             return Err("文件夹路径不存在或不是目录".to_string());
@@ -106,6 +130,7 @@ impl FolderShareServer {
         let clients_clone = Arc::clone(&clients);
         let activity_log = Arc::new(Mutex::new(Vec::<ActivityLogEntry>::new()));
         let activity_log_clone = Arc::clone(&activity_log);
+        let meta = project_meta.clone();
         let connection_count = Arc::new(AtomicU32::new(0));
         let conn_count_clone = Arc::clone(&connection_count);
 
@@ -153,9 +178,10 @@ impl FolderShareServer {
 
                         let activity_log = Arc::clone(&activity_log_clone);
                         let cc = Arc::clone(&conn_count_clone);
+                        let client_meta = meta.clone();
 
                         thread::spawn(move || {
-                            let result = handle_connection(stream, &root, &pw, &client_addr, &activity_log);
+                            let result = handle_connection(stream, &root, &pw, &client_addr, &activity_log, client_meta.as_ref());
                             // 连接断开后移除客户端记录并减少连接计数
                             {
                                 if let Ok(mut guard) = clients.lock() {
@@ -186,6 +212,7 @@ impl FolderShareServer {
             root_path: abs_root,
             clients,
             activity_log,
+            project_meta,
             connection_count,
         })
     }
@@ -209,7 +236,7 @@ impl FolderShareServer {
 
 // ── 连接处理 ──────────────────────────────────────────────────
 
-fn handle_connection(stream: TcpStream, root: &Path, password: &str, client_addr: &str, activity_log: &Arc<Mutex<Vec<ActivityLogEntry>>>) -> Result<(), String> {
+fn handle_connection(stream: TcpStream, root: &Path, password: &str, client_addr: &str, activity_log: &Arc<Mutex<Vec<ActivityLogEntry>>>, project_meta: Option<&ShareProjectMeta>) -> Result<(), String> {
     // 显式设为阻塞模式（Windows 上从非阻塞 listener accept 的 stream 可能继承非阻塞）
     let socket = socket2::Socket::from(stream);
     socket.set_nonblocking(false).map_err(|e| format!("设置阻塞模式失败: {e}"))?;
@@ -224,15 +251,26 @@ fn handle_connection(stream: TcpStream, root: &Path, password: &str, client_addr
     let nonce = generate_nonce();
     send_json_frame(&mut stream, &ServerResponse::Nonce { nonce: nonce.clone() })?;
 
-    // 第二步：读取认证请求（含 password_hash）
+    // 第二步：读取认证请求（含 password_hash 和可选 username）
     let auth_req: ShareRequest = read_json_frame(&mut stream)?;
-    let authenticated = match &auth_req {
-        ShareRequest::Auth { password_hash: pw_hash } => {
+    let (authenticated, client_username) = match &auth_req {
+        ShareRequest::Auth { password_hash: pw_hash, username } => {
+            let uname = username.clone().unwrap_or_else(|| {
+                client_addr.split(':').next().unwrap_or("unknown").to_string()
+            });
             // 计算 SHA-256(password + nonce)，与客户端发来的 hash 比对
             let expected_hash = compute_auth_hash(password, &nonce);
-            pw_hash == &expected_hash // hex 字符串长度固定，比较天然恒定时间
-        },
-        _ => false,
+            // 恒定时间比较，防止时序攻击
+            let auth_ok = pw_hash.len() == expected_hash.len() && {
+                let mut result = 0u8;
+                for (a, b) in pw_hash.bytes().zip(expected_hash.bytes()) {
+                    result |= a ^ b;
+                }
+                result == 0
+            };
+            (auth_ok, uname)
+        }
+        _ => (false, "unknown".to_string()),
     };
 
     if !authenticated {
@@ -291,8 +329,25 @@ fn handle_connection(stream: TcpStream, root: &Path, password: &str, client_addr
             }
             ShareRequest::Upload { path, file_name, file_size } => {
                 set_stream_timeout(&mut stream, Duration::from_secs(300))?;
-                if let Err(e) = handle_upload(&mut stream, root, &path, &file_name, file_size, client_addr, activity_log) {
+                if let Err(e) = handle_upload(&mut stream, root, &path, &file_name, file_size, client_addr, activity_log, &client_username) {
                     log::error!("上传失败: {e}");
+                }
+            }
+            ShareRequest::ProjectInfo => {
+                if let Some(meta) = project_meta {
+                    send_json_frame(&mut stream, &ServerResponse::ProjectInfo {
+                        project_name: meta.project_name.clone(),
+                        owner: meta.owner.clone(),
+                        description: meta.description.clone(),
+                        status: meta.status.clone(),
+                        start_date: meta.start_date.clone(),
+                        end_date: meta.end_date.clone(),
+                    })?;
+                } else {
+                    send_json_frame(&mut stream, &ServerResponse::Status {
+                        success: false,
+                        message: Some("无项目元数据".to_string()),
+                    })?;
                 }
             }
         }
@@ -398,6 +453,7 @@ fn log_activity(activity_log: &Arc<Mutex<Vec<ActivityLogEntry>>>, client_addr: &
 const MAX_UPLOAD_SIZE: u64 = 500 * 1024 * 1024;
 
 /// 处理文件上传请求
+/// 上传文件自动存入 `{client_username}的提交/` 子目录，与 owner 文件隔离
 fn handle_upload(
     stream: &mut TcpStream,
     root: &Path,
@@ -406,6 +462,7 @@ fn handle_upload(
     file_size: u64,
     client_addr: &str,
     activity_log: &Arc<Mutex<Vec<ActivityLogEntry>>>,
+    client_username: &str,
 ) -> Result<(), String> {
     // 检查上传大小
     if file_size > MAX_UPLOAD_SIZE {
@@ -416,8 +473,13 @@ fn handle_upload(
         return Err("上传文件过大".to_string());
     }
 
-    // 解析目标目录路径
-    let target_dir = resolve_path(root, rel_dir)?;
+    // 解析目标目录路径，重定向到 `{username}的提交/` 子目录
+    let base_dir = resolve_path(root, rel_dir)?;
+    let upload_subdir = format!("{}的提交", client_username);
+    let target_dir = base_dir.join(&upload_subdir);
+    // 确保子目录存在
+    fs::create_dir_all(&target_dir).map_err(|e| format!("创建上传子目录失败: {e}"))?;
+
     if !target_dir.is_dir() {
         send_json_frame(stream, &ServerResponse::UploadAck {
             accepted: false,
@@ -514,6 +576,7 @@ pub struct ShareStatus {
 pub fn start_folder_share(
     app: tauri::AppHandle,
     state: State<'_, FolderShareState>,
+    conn: State<'_, DbConn>,
     path: String,
     password: String,
 ) -> Result<u16, String> {
@@ -528,20 +591,44 @@ pub fn start_folder_share(
         }
     }
 
-    let server = FolderShareServer::start(path, password)?;
+    // 查找关联的项目元数据
+    let project_meta = lookup_project_meta(&conn, &canonical);
+
+    let server = FolderShareServer::start(path, password, project_meta)?;
     let port = server.port();
     guard.insert(port, server);
-    events::emit_notification(&app, "success", "共享已开启", &format!("端口: {}", port), None);
+
+    // 更新 mDNS 广播共享端口
+    if let Some(mdns) = app.try_state::<MdnsState>() {
+        if let Ok(mut mdns_guard) = mdns.lock() {
+            if let Err(e) = mdns_guard.update_share_port(Some(port)) {
+                log::warn!("更新 mDNS 共享端口失败: {e}");
+            }
+        }
+    }
+
+    events::emit_notification_checked(&app, conn.inner(), "share_started", "success", "共享已开启", &format!("端口: {}", port), None);
     Ok(port)
 }
 
 #[tauri::command]
-pub fn stop_folder_share(app: tauri::AppHandle, state: State<'_, FolderShareState>, port: u16) -> Result<(), String> {
+pub fn stop_folder_share(app: tauri::AppHandle, state: State<'_, FolderShareState>, db: State<'_, DbConn>, port: u16) -> Result<(), String> {
     let mut guard = state.lock().map_err(|e| e.to_string())?;
     if let Some(server) = guard.remove(&port) {
         server.stop();
     }
-    events::emit_notification(&app, "info", "共享已停止", "", None);
+
+    // 更新 mDNS：若还有其他活跃共享，广播其端口；否则清除
+    let remaining_port = guard.values().next().map(|s| s.port());
+    if let Some(mdns) = app.try_state::<MdnsState>() {
+        if let Ok(mut mdns_guard) = mdns.lock() {
+            if let Err(e) = mdns_guard.update_share_port(remaining_port) {
+                log::warn!("更新 mDNS 共享端口失败: {e}");
+            }
+        }
+    }
+
+    events::emit_notification_checked(&app, db.inner(), "share_stopped", "info", "共享已停止", "", None);
     Ok(())
 }
 
@@ -581,7 +668,7 @@ pub fn get_activity_log(state: State<'_, FolderShareState>, port: u16) -> Result
 
 // ── TCP 客户端（加入远程共享）────────────────────────────────────
 
-fn connect_and_auth(addr: &str, password: &str) -> Result<TcpStream, String> {
+pub fn connect_and_auth(addr: &str, password: &str) -> Result<TcpStream, String> {
     let socket_addr = addr.parse::<std::net::SocketAddr>()
         .map_err(|e| format!("地址格式无效: {e}"))?;
     let mut stream = TcpStream::connect_timeout(&socket_addr, Duration::from_secs(5))
@@ -605,8 +692,10 @@ fn connect_and_auth(addr: &str, password: &str) -> Result<TcpStream, String> {
 
     // 第二步：计算 SHA-256(password + nonce)，发送 hash
     let password_hash = compute_auth_hash(password, &nonce);
+    let username = super::utils::get_hostname();
     send_json_frame(&mut stream, &ShareRequest::Auth {
         password_hash,
+        username: Some(username),
     })?;
 
     // 读取认证响应
@@ -623,8 +712,6 @@ fn connect_and_auth(addr: &str, password: &str) -> Result<TcpStream, String> {
     Ok(stream)
 }
 
-pub type RemoteDirEntry = DirEntry;
-
 #[tauri::command]
 pub fn join_shared_folder(addr: String, password: String) -> Result<String, String> {
     let _stream = connect_and_auth(&addr, &password)?;
@@ -636,7 +723,7 @@ pub fn list_remote_files(
     addr: String,
     password: String,
     path: String,
-) -> Result<Vec<RemoteDirEntry>, String> {
+) -> Result<Vec<DirEntry>, String> {
     let mut stream = connect_and_auth(&addr, &password)?;
     set_stream_timeout(&mut stream, Duration::from_secs(30))?;
 
@@ -796,4 +883,229 @@ fn compute_auth_hash(password: &str, nonce: &str) -> String {
     hasher.update(nonce.as_bytes());
     let hash = hasher.finalize();
     hex_encode(&hash)
+}
+
+// ── 项目元数据查找 ──────────────────────────────────────────────
+
+/// 根据文件夹路径查找关联的项目元数据
+fn lookup_project_meta(conn: &DbConn, folder_path: &Path) -> Option<ShareProjectMeta> {
+    let guard = conn.lock().ok()?;
+    let path_str = folder_path.to_string_lossy().to_string();
+    let row = guard.query_row(
+        "SELECT name, description, status, start_date, end_date, created_by FROM projects WHERE folder_path = ?1",
+        rusqlite::params![path_str],
+        |row| {
+            Ok(ShareProjectMeta {
+                project_name: row.get::<_, String>(0).unwrap_or_default(),
+                owner: row.get::<_, String>(5).unwrap_or_default(),
+                description: row.get::<_, Option<String>>(1).ok().flatten(),
+                status: row.get::<_, Option<String>>(2).ok().flatten(),
+                start_date: row.get::<_, Option<String>>(3).ok().flatten(),
+                end_date: row.get::<_, Option<String>>(4).ok().flatten(),
+            })
+        },
+    ).ok()?;
+    Some(row)
+}
+
+// ── 远程项目信息获取 ─────────────────────────────────────────────
+
+/// 从远程共享获取项目信息
+#[tauri::command]
+pub fn get_remote_project_info(
+    addr: String,
+    password: String,
+) -> Result<ShareProjectMeta, String> {
+    let mut stream = connect_and_auth(&addr, &password)?;
+    set_stream_timeout(&mut stream, Duration::from_secs(10))?;
+
+    send_json_frame(&mut stream, &ShareRequest::ProjectInfo)?;
+
+    let resp: ServerResponse = read_json_frame(&mut stream)?;
+    match resp {
+        ServerResponse::ProjectInfo { project_name, owner, description, status, start_date, end_date } => {
+            Ok(ShareProjectMeta {
+                project_name,
+                owner,
+                description,
+                status,
+                start_date,
+                end_date,
+            })
+        }
+        ServerResponse::Status { success: false, message } => {
+            Err(message.unwrap_or_else(|| "获取项目信息失败".to_string()))
+        }
+        _ => Err("意外的响应类型".to_string()),
+    }
+}
+
+// ── 共享项目 CRUD ────────────────────────────────────────────────
+
+use crate::db::models::SharedProject;
+
+/// 获取所有共享项目
+#[tauri::command]
+pub fn get_shared_projects(conn: State<'_, DbConn>) -> Result<Vec<SharedProject>, String> {
+    let guard = conn.lock().map_err(|e| e.to_string())?;
+    let mut stmt = guard
+        .prepare("SELECT id, local_project_id, remote_addr, remote_root_path, remote_project_name, remote_owner, password, role, last_synced, status, created_at FROM shared_projects ORDER BY created_at DESC")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| {
+            let encoded_pwd: String = row.get(6)?;
+            Ok(SharedProject {
+                id: row.get(0)?,
+                local_project_id: row.get(1)?,
+                remote_addr: row.get(2)?,
+                remote_root_path: row.get(3)?,
+                remote_project_name: row.get(4)?,
+                remote_owner: row.get(5)?,
+                password: decode_password(&encoded_pwd),
+                role: row.get(7)?,
+                last_synced: row.get(8)?,
+                status: row.get(9)?,
+                created_at: row.get(10)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+
+    let mut projects = Vec::new();
+    for row in rows {
+        projects.push(row.map_err(|e| e.to_string())?);
+    }
+    Ok(projects)
+}
+
+/// 导入远程共享项目到本地
+#[tauri::command]
+pub fn import_shared_project(
+    app: tauri::AppHandle,
+    conn: State<'_, DbConn>,
+    addr: String,
+    password: String,
+    root_path: String,
+) -> Result<i64, String> {
+    // 1. 获取远程项目信息
+    let meta = get_remote_project_info(addr.clone(), password.clone())?;
+
+    // 2-5. 在事务中完成所有数据库操作，避免中间状态不一致
+    let local_project_id = {
+        let mut guard = conn.lock().map_err(|e| e.to_string())?;
+        let tx = guard.transaction().map_err(|e| e.to_string())?;
+
+        // 创建本地项目
+        tx.execute(
+            "INSERT INTO projects (name, description, status, start_date, end_date, created_by) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            rusqlite::params![
+                meta.project_name,
+                meta.description.unwrap_or_default(),
+                meta.status.unwrap_or_else(|| "planning".to_string()),
+                meta.start_date,
+                meta.end_date,
+                meta.owner,
+            ],
+        ).map_err(|e| e.to_string())?;
+        let pid = tx.last_insert_rowid();
+
+        // 创建默认看板列
+        let default_columns = ["待办", "进行中", "已完成"];
+        for (i, title) in default_columns.iter().enumerate() {
+            tx.execute(
+                "INSERT INTO kanban_columns (project_id, title, position) VALUES (?1, ?2, ?3)",
+                rusqlite::params![pid, title, i as i32],
+            ).map_err(|e| e.to_string())?;
+        }
+
+        // 写入 shared_projects 记录（密码混淆存储）
+        let encoded_pwd = encode_password(&password);
+        tx.execute(
+            "INSERT INTO shared_projects (local_project_id, remote_addr, remote_root_path, remote_project_name, remote_owner, password, role, last_synced, status) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'member', datetime('now'), 'connected')",
+            rusqlite::params![pid, addr, root_path, meta.project_name, meta.owner, encoded_pwd],
+        ).map_err(|e| e.to_string())?;
+
+        // 同时保存到共享连接表
+        tx.execute(
+            "INSERT INTO shared_connections (addr, label, password, last_connected) VALUES (?1, ?2, ?3, datetime('now')) ON CONFLICT(addr) DO UPDATE SET label = ?2, password = ?3, last_connected = datetime('now')",
+            rusqlite::params![addr, meta.project_name, encoded_pwd],
+        ).map_err(|e| e.to_string())?;
+
+        tx.commit().map_err(|e| e.to_string())?;
+        pid
+    };
+
+    events::emit_notification_checked(&app, conn.inner(), "file_received", "success", "项目已导入", &format!("已从 {} 导入: {}", meta.owner, meta.project_name), None);
+    Ok(local_project_id)
+}
+
+/// 同步远程共享项目的元数据
+#[tauri::command]
+pub fn sync_shared_project(
+    conn: State<'_, DbConn>,
+    shared_project_id: i64,
+) -> Result<(), String> {
+    // 获取共享项目信息
+    let (addr, password, local_project_id) = {
+        let guard = conn.lock().map_err(|e| e.to_string())?;
+        let (addr, encoded_pwd, lpid) = guard.query_row(
+            "SELECT remote_addr, password, local_project_id FROM shared_projects WHERE id = ?1",
+            rusqlite::params![shared_project_id],
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, Option<i64>>(2)?)),
+        ).map_err(|e| e.to_string())?;
+        (addr, decode_password(&encoded_pwd), lpid)
+    };
+
+    // 获取远程项目信息
+    let meta = get_remote_project_info(addr.clone(), password)?;
+
+    // 更新本地项目
+    if let Some(pid) = local_project_id {
+        let guard = conn.lock().map_err(|e| e.to_string())?;
+        guard.execute(
+            "UPDATE projects SET name = ?1, status = ?2, start_date = ?3, end_date = ?4, updated_at = datetime('now') WHERE id = ?5",
+            rusqlite::params![meta.project_name, meta.status, meta.start_date, meta.end_date, pid],
+        ).map_err(|e| e.to_string())?;
+    }
+
+    // 更新 shared_projects 记录
+    {
+        let guard = conn.lock().map_err(|e| e.to_string())?;
+        guard.execute(
+            "UPDATE shared_projects SET remote_project_name = ?1, remote_owner = ?2, last_synced = datetime('now'), status = 'connected' WHERE id = ?3",
+            rusqlite::params![meta.project_name, meta.owner, shared_project_id],
+        ).map_err(|e| e.to_string())?;
+    }
+
+    Ok(())
+}
+
+/// 断开共享项目连接
+#[tauri::command]
+pub fn disconnect_shared_project(
+    conn: State<'_, DbConn>,
+    shared_project_id: i64,
+    delete_local: bool,
+) -> Result<(), String> {
+    let guard = conn.lock().map_err(|e| e.to_string())?;
+
+    // 获取本地项目 ID
+    let local_project_id: Option<i64> = guard.query_row(
+        "SELECT local_project_id FROM shared_projects WHERE id = ?1",
+        rusqlite::params![shared_project_id],
+        |row| row.get(0),
+    ).map_err(|e| e.to_string())?;
+
+    // 删除共享项目记录
+    guard.execute("DELETE FROM shared_projects WHERE id = ?1", rusqlite::params![shared_project_id])
+        .map_err(|e| e.to_string())?;
+
+    // 如果需要，删除本地项目（CASCADE 会删除相关看板、甘特图等）
+    if delete_local {
+        if let Some(pid) = local_project_id {
+            guard.execute("DELETE FROM projects WHERE id = ?1", rusqlite::params![pid])
+                .map_err(|e| e.to_string())?;
+        }
+    }
+
+    Ok(())
 }

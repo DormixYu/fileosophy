@@ -14,6 +14,7 @@ import {
   DEFAULT_NUMBER_TEMPLATE,
   DEFAULT_FOLDER_TEMPLATE,
 } from "@/types";
+import { ConfirmDialog } from "@/components/common/Modal";
 
 export default function ProjectConfigSection({ onDirtyChange }: { onDirtyChange?: (dirty: boolean) => void }) {
   const { settings, saveSettings, parsedStatuses, parsedTypes, parsedColumns } = useSettingsStore();
@@ -39,8 +40,11 @@ export default function ProjectConfigSection({ onDirtyChange }: { onDirtyChange?
   const [columns, setColumns] = useState<ProjectTableColumn[]>(() => parsedColumns);
 
   const [dirty, setDirty] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
   const [newTypeName, setNewTypeName] = useState("");
   const [newTypePrefix, setNewTypePrefix] = useState("");
+  const [newStatusName, setNewStatusName] = useState("");
+  const [newStatusColor, setNewStatusColor] = useState("#6366f1");
 
   useEffect(() => {
     onDirtyChange?.(dirty);
@@ -61,6 +65,10 @@ export default function ProjectConfigSection({ onDirtyChange }: { onDirtyChange?
   };
 
   const handleReset = () => {
+    setConfirmReset(true);
+  };
+
+  const confirmResetConfig = () => {
     setNumberTemplate(DEFAULT_NUMBER_TEMPLATE);
     setFolderTemplate(DEFAULT_FOLDER_TEMPLATE);
     setDateFormat("YYMMDD");
@@ -69,6 +77,7 @@ export default function ProjectConfigSection({ onDirtyChange }: { onDirtyChange?
     setStatuses([...DEFAULT_PROJECT_STATUSES]);
     setColumns([...DEFAULT_PROJECT_TABLE_COLUMNS]);
     setDirty(true);
+    setConfirmReset(false);
   };
 
   const addType = () => {
@@ -107,17 +116,43 @@ export default function ProjectConfigSection({ onDirtyChange }: { onDirtyChange?
     setDirty(true);
   };
 
+  // 项目状态管理
+  const addStatus = () => {
+    if (!newStatusName.trim()) return;
+    const id = newStatusName.trim().toLowerCase().replace(/\s+/g, "_");
+    if (statuses.some((s) => s.id === id)) return;
+    setStatuses((prev) => [
+      ...prev,
+      { id: id as ProjectStatusConfig["id"], name: newStatusName.trim(), color: newStatusColor, sort_order: prev.length },
+    ]);
+    setNewStatusName("");
+    setNewStatusColor("#6366f1");
+    setDirty(true);
+  };
+
+  const removeStatus = (id: string) => {
+    setStatuses((prev) => prev.filter((s) => s.id !== id));
+    setDirty(true);
+  };
+
+  const updateStatusName = (id: string, name: string) => {
+    setStatuses((prev) => prev.map((s) => (s.id === id ? { ...s, name } : s)));
+    setDirty(true);
+  };
+
+  const updateStatusColor = (id: string, color: string) => {
+    setStatuses((prev) => prev.map((s) => (s.id === id ? { ...s, color } : s)));
+    setDirty(true);
+  };
+
   return (
+    <>
     <section className="animate-slide-up space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <h2 className="text-title font-serif" style={{ color: "var(--text-primary)" }}>
+          <h2 className="text-lg" style={{ color: "var(--text-primary)" }}>
             项目配置
           </h2>
-          <div
-            className="w-8 h-[2px] rounded-full"
-            style={{ background: "var(--gold)", opacity: 0.5 }}
-          />
         </div>
         <div className="flex gap-2">
           <button className="btn btn-outline btn-sm" onClick={handleReset}>
@@ -137,15 +172,11 @@ export default function ProjectConfigSection({ onDirtyChange }: { onDirtyChange?
       </div>
       <div>
         <div className="flex items-center gap-3 mb-2">
-          <h2 className="text-title font-serif" style={{ color: "var(--text-primary)" }}>
+          <h3 className="text-base" style={{ color: "var(--text-primary)" }}>
             编号模板
-          </h2>
-          <div
-            className="w-6 h-[1px] rounded-full"
-            style={{ background: "var(--gold)", opacity: 0.4 }}
-          />
+          </h3>
         </div>
-        <p className="text-xs mb-3 font-mono" style={{ color: "var(--text-tertiary)" }}>
+        <p className="text-xs mb-3" style={{ color: "var(--text-tertiary)" }}>
           支持变量：{"{prefix}"}（项目分类前缀）、{"{date}"}（日期）、{"{sequence}"}（当日序号）
         </p>
         <div className="flex items-center gap-3 mb-3">
@@ -158,7 +189,7 @@ export default function ProjectConfigSection({ onDirtyChange }: { onDirtyChange?
         </div>
         <div className="flex items-center gap-3">
           <div>
-            <label className="text-[11px] mb-1 block font-mono" style={{ color: "var(--text-muted)" }}>文件夹模板</label>
+            <label className="text-[11px] mb-1 block" style={{ color: "var(--text-muted)" }}>文件夹模板</label>
             <input
               type="text"
               value={folderTemplate}
@@ -167,7 +198,7 @@ export default function ProjectConfigSection({ onDirtyChange }: { onDirtyChange?
             />
           </div>
           <div>
-            <label className="text-[11px] mb-1 block font-mono" style={{ color: "var(--text-muted)" }}>日期格式</label>
+            <label className="text-[11px] mb-1 block" style={{ color: "var(--text-muted)" }}>日期格式</label>
             <select
               value={dateFormat}
               onChange={(e) => { setDateFormat(e.target.value); setDirty(true); }}
@@ -180,8 +211,8 @@ export default function ProjectConfigSection({ onDirtyChange }: { onDirtyChange?
         </div>
 
         <div className="mt-3">
-          <label className="text-[11px] mb-1 block font-mono" style={{ color: "var(--text-muted)" }}>项目根目录</label>
-          <p className="text-xs mb-2 font-mono" style={{ color: "var(--text-tertiary)" }}>
+          <label className="text-[11px] mb-1 block" style={{ color: "var(--text-muted)" }}>项目根目录</label>
+          <p className="text-xs mb-2" style={{ color: "var(--text-tertiary)" }}>
             新建项目时在此目录下自动创建项目文件夹。留空则不自动创建。
           </p>
           <div className="flex items-center gap-2">
@@ -209,22 +240,18 @@ export default function ProjectConfigSection({ onDirtyChange }: { onDirtyChange?
 
       <div>
         <div className="flex items-center gap-3 mb-3">
-          <h2 className="text-title font-serif" style={{ color: "var(--text-primary)" }}>
+          <h3 className="text-base" style={{ color: "var(--text-primary)" }}>
             项目分类
-          </h2>
-          <div
-            className="w-6 h-[1px] rounded-full"
-            style={{ background: "var(--gold)", opacity: 0.4 }}
-          />
+          </h3>
         </div>
         <div className="space-y-2 mb-3">
           {types.map((t) => (
             <div key={t.id} className="card flex items-center gap-3 py-2 px-3 hover-gold-bg transition-colors">
-              <span className="flex-1 text-sm font-serif" style={{ color: "var(--text-primary)" }}>
+              <span className="flex-1 text-sm" style={{ color: "var(--text-primary)" }}>
                 {t.name}
               </span>
               <div className="flex items-center gap-2">
-                <label className="text-[11px] font-mono" style={{ color: "var(--text-muted)" }}>前缀</label>
+                <label className="text-[11px]" style={{ color: "var(--text-muted)" }}>前缀</label>
                 <input
                   type="text"
                   value={t.prefix}
@@ -277,54 +304,76 @@ export default function ProjectConfigSection({ onDirtyChange }: { onDirtyChange?
 
       <div>
         <div className="flex items-center gap-3 mb-3">
-          <h2 className="text-title font-serif" style={{ color: "var(--text-primary)" }}>
+          <h3 className="text-base" style={{ color: "var(--text-primary)" }}>
             项目状态
-          </h2>
-          <div
-            className="w-6 h-[1px] rounded-full"
-            style={{ background: "var(--gold)", opacity: 0.4 }}
-          />
+          </h3>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="space-y-2 mb-3">
           {statuses.map((s) => (
-            <div
-              key={s.id}
-              className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono"
-              style={{
-                background: `${s.color}18`,
-                border: `1px solid ${s.color}30`,
-                color: s.color,
-                letterSpacing: "0.04em",
-              }}
-            >
-              <span
-                className="w-2 h-2 rounded-full"
-                style={{ background: s.color }}
+            <div key={s.id} className="card flex items-center gap-3 py-2 px-3 hover-gold-bg transition-colors">
+              <input
+                type="color"
+                value={s.color}
+                onChange={(e) => updateStatusColor(s.id, e.target.value)}
+                className="w-6 h-6 rounded cursor-pointer border-0 p-0"
+                style={{ background: "none" }}
               />
-              {s.name}
+              <input
+                type="text"
+                value={s.name}
+                onChange={(e) => updateStatusName(s.id, e.target.value)}
+                className="input-base flex-1 text-xs"
+              />
+              <span
+                className="badge text-[10px] px-2 py-0.5"
+                style={{ background: `${s.color}18`, color: s.color }}
+              >
+                {s.id}
+              </span>
+              <button
+                onClick={() => removeStatus(s.id)}
+                className="p-1 rounded hover-danger-text transition-colors"
+                style={{ color: "var(--text-muted)", cursor: "pointer", background: "none", border: "none" }}
+              >
+                <Trash2 size={13} strokeWidth={1.5} />
+              </button>
             </div>
           ))}
         </div>
-        <p className="text-xs mt-2 font-mono" style={{ color: "var(--text-muted)" }}>
-          项目状态暂不支持在线编辑，如需修改请直接编辑设置表中的 project_statuses 键值。
-        </p>
+        <div className="flex items-center gap-2">
+          <input
+            type="color"
+            value={newStatusColor}
+            onChange={(e) => setNewStatusColor(e.target.value)}
+            className="w-8 h-8 rounded cursor-pointer border-0 p-0"
+            style={{ background: "none" }}
+          />
+          <input
+            type="text"
+            placeholder="状态名称"
+            value={newStatusName}
+            onChange={(e) => setNewStatusName(e.target.value)}
+            className="input-base w-40"
+            onKeyDown={(e) => e.key === "Enter" && addStatus()}
+          />
+          <button className="btn btn-primary btn-sm" onClick={addStatus}>
+            <Plus size={13} strokeWidth={1.5} />
+            添加
+          </button>
+        </div>
       </div>
 
       <div>
         <div className="flex items-center gap-3 mb-3">
-          <h2 className="text-title font-serif" style={{ color: "var(--text-primary)" }}>
+          <h3 className="text-base" style={{ color: "var(--text-primary)" }}>
             项目列表显示列
-          </h2>
-          <div
-            className="w-6 h-[1px] rounded-full"
-            style={{ background: "var(--gold)", opacity: 0.4 }}
-          />
+          </h3>
         </div>
         <div className="grid grid-cols-2 gap-2">
           {columns.map((col) => (
             <label
               key={col.key}
-              className="flex items-center gap-2 py-1.5 px-3 rounded-md text-xs cursor-pointer transition-colors font-mono hover-surface-alt-bg"
+              className="flex items-center gap-2 py-1.5 px-3 rounded-md text-xs cursor-pointer transition-colors hover-surface-alt-bg"
               style={{
                 color: col.fixed ? "var(--text-muted)" : "var(--text-primary)",
                 opacity: col.fixed ? 0.6 : 1,
@@ -348,5 +397,15 @@ export default function ProjectConfigSection({ onDirtyChange }: { onDirtyChange?
         </div>
       </div>
     </section>
+
+    <ConfirmDialog
+      open={confirmReset}
+      title="恢复默认项目配置"
+      message="确定将项目配置恢复为默认值？包括项目类型、状态、编号模板等。修改后需点击保存才会生效。"
+      confirmLabel="恢复默认"
+      onConfirm={confirmResetConfig}
+      onClose={() => setConfirmReset(false)}
+    />
+    </>
   );
 }

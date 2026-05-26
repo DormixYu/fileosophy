@@ -170,6 +170,36 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
         "INSERT OR IGNORE INTO settings (key, value) VALUES ('default_project_path', '');"
     )?;
 
+    // ── 增量迁移：共享连接表（密码持久化）──────────────────────────
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS shared_connections (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            addr TEXT NOT NULL UNIQUE,
+            label TEXT NOT NULL DEFAULT '',
+            password TEXT NOT NULL,
+            last_connected TEXT,
+            last_path TEXT DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );"
+    )?;
+
+    // ── 增量迁移：共享项目表 ──────────────────────────────────────
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS shared_projects (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            local_project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+            remote_addr TEXT NOT NULL,
+            remote_root_path TEXT NOT NULL DEFAULT '',
+            remote_project_name TEXT NOT NULL DEFAULT '',
+            remote_owner TEXT NOT NULL DEFAULT '',
+            password TEXT NOT NULL,
+            role TEXT NOT NULL DEFAULT 'member',
+            last_synced TEXT,
+            status TEXT NOT NULL DEFAULT 'connected',
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );"
+    )?;
+
     // ── 增量迁移：合并旧 key project_root_path → default_project_path ──
     conn.execute_batch(
         "INSERT OR IGNORE INTO settings (key, value)

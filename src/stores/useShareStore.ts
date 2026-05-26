@@ -1,11 +1,12 @@
 import { create } from "zustand";
-import { shareApi, fileApi, settingsApi, systemApi } from "@/lib/tauri-api";
-import type { SavedConnection, Peer, ClientInfo, RemoteDirEntry, ActivityLogEntry } from "@/types";
+import { shareApi, fileApi, systemApi } from "@/lib/tauri-api";
+import type { SharedConnection, SharedProject, Peer, ClientInfo, RemoteDirEntry, ActivityLogEntry } from "@/types";
 
 interface ShareState {
   shareStatus: { port: number; path: string }[];
   localIp: string;
-  savedConnections: SavedConnection[];
+  savedConnections: SharedConnection[];
+  sharedProjects: SharedProject[];
   peers: Peer[];
   connectedClients: ClientInfo[];
   activityLog: ActivityLogEntry[];
@@ -17,8 +18,14 @@ interface ShareState {
   fetchConnections: () => Promise<void>;
   addConnection: (addr: string, password: string, label?: string) => Promise<void>;
   removeConnection: (addr: string) => Promise<void>;
-  reconnect: (addr: string) => Promise<void>;
+  reconnect: (addr: string) => Promise<boolean>;
   updateLastPath: (addr: string, path: string) => Promise<void>;
+  testConnection: (addr: string, password: string) => Promise<boolean>;
+
+  fetchSharedProjects: () => Promise<void>;
+  importProject: (addr: string, password: string, rootPath: string) => Promise<number>;
+  syncProject: (id: number) => Promise<void>;
+  disconnectProject: (id: number, deleteLocal: boolean) => Promise<void>;
 
   fetchPeers: () => Promise<void>;
   fetchLocalIp: () => Promise<void>;
@@ -27,22 +34,22 @@ interface ShareState {
   uploadRemote: (addr: string, password: string, remoteDir: string, fileName: string, localPath: string) => Promise<void>;
 }
 
-const saveConnectionsToSettings = async (connections: SavedConnection[]) => {
-  const settings = await settingsApi.get();
-  await settingsApi.update({ ...settings, share_connections: JSON.stringify(connections) });
-};
-
 export const useShareStore = create<ShareState>((set, get) => ({
   shareStatus: [],
   localIp: "",
   savedConnections: [],
+  sharedProjects: [],
   peers: [],
   connectedClients: [],
   activityLog: [],
 
   fetchShareStatus: async () => {
-    const status = await shareApi.getStatus();
-    set({ shareStatus: status });
+    try {
+      const status = await shareApi.getStatus();
+      set({ shareStatus: status });
+    } catch (e) {
+      console.error("获取分享状态失败:", e);
+    }
   },
 
   startShare: async (path: string, password: string) => {
@@ -58,15 +65,17 @@ export const useShareStore = create<ShareState>((set, get) => ({
   },
 
   fetchConnections: async () => {
-    const settings = await settingsApi.get();
-    const raw = settings["share_connections"];
-    if (raw) {
+    try {
+      // 首次启动时尝试迁移旧数据
       try {
-        set({ savedConnections: JSON.parse(raw) });
+        await shareApi.migrateLegacy();
       } catch {
-        set({ savedConnections: [] });
+        // 迁移失败不影响后续流程
       }
-    } else {
+      const connections = await shareApi.getConnections();
+      set({ savedConnections: connections });
+    } catch (e) {
+      console.error("获取共享连接失败:", e);
       set({ savedConnections: [] });
     }
   },
@@ -86,57 +95,119 @@ export const useShareStore = create<ShareState>((set, get) => ({
       // 获取失败不影响连接流程
     }
 
-    const conn: SavedConnection = {
-      addr,
-      label: finalLabel,
-      last_connected: new Date().toISOString(),
-      last_path: "",
-    };
-    const connections = [...get().savedConnections, conn];
-    set({ savedConnections: connections });
-    await saveConnectionsToSettings(connections);
+    await shareApi.saveConnection(addr, password, finalLabel);
+    await get().fetchConnections();
   },
 
   removeConnection: async (addr: string) => {
-    const connections = get().savedConnections.filter((c) => c.addr !== addr);
-    set({ savedConnections: connections });
-    await saveConnectionsToSettings(connections);
+    try {
+      await shareApi.deleteConnection(addr);
+    } catch {
+      // 如果后端删除失败（比如连接不存在），仍然从本地移除
+    }
+    set({ savedConnections: get().savedConnections.filter((c) => c.addr !== addr) });
   },
 
   reconnect: async (addr: string) => {
-    const connections = get().savedConnections.map((c) =>
-      c.addr === addr ? { ...c, last_connected: new Date().toISOString() } : c
-    );
-    set({ savedConnections: connections });
-    await saveConnectionsToSettings(connections);
+    const conn = get().savedConnections.find((c) => c.addr === addr);
+    if (!conn) return false;
+
+    try {
+      const password = conn.password ?? await shareApi.getConnectionPassword(addr);
+      await shareApi.join(addr, password);
+      await shareApi.updateConnection(addr);
+      // 更新本地状态
+      set({
+        savedConnections: get().savedConnections.map((c) =>
+          c.addr === addr ? { ...c, last_connected: new Date().toISOString() } : c
+        ),
+      });
+      return true;
+    } catch {
+      return false;
+    }
   },
 
   updateLastPath: async (addr: string, path: string) => {
-    const connections = get().savedConnections.map((c) =>
-      c.addr === addr ? { ...c, last_path: path } : c
-    );
-    set({ savedConnections: connections });
-    await saveConnectionsToSettings(connections);
+    try {
+      await shareApi.updateConnection(addr, path);
+    } catch {
+      // 忽略更新失败
+    }
+    set({
+      savedConnections: get().savedConnections.map((c) =>
+        c.addr === addr ? { ...c, last_path: path } : c
+      ),
+    });
+  },
+
+  testConnection: async (addr: string, password: string) => {
+    try {
+      return await shareApi.testConnection(addr, password);
+    } catch {
+      return false;
+    }
+  },
+
+  fetchSharedProjects: async () => {
+    try {
+      const projects = await shareApi.getSharedProjects();
+      set({ sharedProjects: projects });
+    } catch (e) {
+      console.error("获取共享项目失败:", e);
+    }
+  },
+
+  importProject: async (addr: string, password: string, rootPath: string) => {
+    const projectId = await shareApi.importProject(addr, password, rootPath);
+    await get().fetchSharedProjects();
+    return projectId;
+  },
+
+  syncProject: async (id: number) => {
+    await shareApi.syncProject(id);
+    await get().fetchSharedProjects();
+  },
+
+  disconnectProject: async (id: number, deleteLocal: boolean) => {
+    await shareApi.disconnectProject(id, deleteLocal);
+    await get().fetchSharedProjects();
   },
 
   fetchPeers: async () => {
-    const peers = await fileApi.discoverPeers();
-    set({ peers });
+    try {
+      const peers = await fileApi.discoverPeers();
+      set({ peers });
+    } catch (e) {
+      console.error("发现对等节点失败:", e);
+    }
   },
 
   fetchLocalIp: async () => {
-    const ip = await systemApi.localIp();
-    set({ localIp: ip });
+    try {
+      const ip = await systemApi.localIp();
+      set({ localIp: ip });
+    } catch (e) {
+      console.error("获取本机IP失败:", e);
+    }
   },
 
   fetchConnectedClients: async (port: number) => {
-    const clients = await shareApi.getConnectedClients(port);
-    set({ connectedClients: clients });
+    try {
+      const clients = await shareApi.getConnectedClients(port);
+      set({ connectedClients: clients });
+    } catch (e) {
+      console.error("获取连接客户端失败:", e);
+    }
   },
 
   fetchActivityLog: async (port: number) => {
-    const log = await shareApi.getActivityLog(port);
-    set({ activityLog: log });
+    try {
+      const log = await shareApi.getActivityLog(port);
+      set({ activityLog: log });
+    } catch (e) {
+      console.error("获取活动日志失败:", e);
+    }
   },
 
   uploadRemote: async (addr: string, password: string, remoteDir: string, fileName: string, localPath: string) => {

@@ -9,6 +9,7 @@ pub mod notifications;
 pub mod projects;
 pub mod search;
 pub mod settings;
+pub mod shared_connections;
 pub mod status_history;
 pub mod system;
 pub mod user;

@@ -21,7 +21,6 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(|app| {
             // 设置窗口图标
@@ -52,7 +51,7 @@ pub fn run() {
             // 启动 mDNS 服务发现
             match MdnsService::new() {
                 Ok(mut mdns_service) => {
-                    if let Err(e) = mdns_service.register(transfer_port, &transfer_token) {
+                    if let Err(e) = mdns_service.register(transfer_port, &transfer_token, None) {
                         log::warn!("mDNS 注册失败: {e}");
                     }
                     if let Err(e) = mdns_service.start_discovery() {
@@ -177,6 +176,20 @@ pub fn run() {
             commands::user::get_current_user,
             commands::user::create_or_update_user,
             commands::user::upload_avatar,
+            // 共享连接管理
+            commands::shared_connections::get_shared_connections,
+            commands::shared_connections::save_shared_connection,
+            commands::shared_connections::delete_shared_connection,
+            commands::shared_connections::update_shared_connection,
+            commands::shared_connections::test_shared_connection,
+            commands::shared_connections::migrate_legacy_connections,
+            commands::shared_connections::get_connection_password,
+            // 共享项目管理
+            commands::folder_share::get_shared_projects,
+            commands::folder_share::import_shared_project,
+            commands::folder_share::sync_shared_project,
+            commands::folder_share::disconnect_shared_project,
+            commands::folder_share::get_remote_project_info,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

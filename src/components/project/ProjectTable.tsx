@@ -50,7 +50,7 @@ function CellContent({
   switch (column.key) {
     case "project_number":
       return (
-        <span className="font-mono text-[11px]" style={{ color: "var(--text-secondary)" }}>
+        <span className="text-[11px]" style={{ color: "var(--text-secondary)" }}>
           {String(value || "—")}
         </span>
       );
@@ -59,7 +59,7 @@ function CellContent({
       return (
         <Link
           to={`/project/${project.id}`}
-          className="hover:underline font-serif"
+          className="hover:underline"
           style={{ color: "var(--text-primary)" }}
         >
           {String(value)}
@@ -92,7 +92,7 @@ function CellContent({
     case "updated_at":
     case "status_changed_at":
       return (
-        <span className="font-mono text-[11px]" style={{ color: "var(--text-tertiary)" }}>
+        <span className="text-[11px]" style={{ color: "var(--text-tertiary)" }}>
           {formatDate(String(value || ""))}
         </span>
       );

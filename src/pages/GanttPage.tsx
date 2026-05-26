@@ -31,16 +31,43 @@ import GanttTooltip from "@/components/gantt/GanttTooltip";
 import MilestoneModal from "@/components/gantt/MilestoneModal";
 import StatusHistoryModal from "@/components/gantt/StatusHistoryModal";
 
+const FILTERS_KEY = "project_filters";
+
+interface SavedFilters {
+  status: string[];
+  type: string[];
+  startDate: string;
+  endDate: string;
+}
+
 export default function GanttPage() {
   const navigate = useNavigate();
   const { projects, fetchProjects, loading } = useProjectStore();
-  const { parsedStatuses, parsedTypes } = useSettingsStore();
+  const { parsedStatuses, parsedTypes, settings, saveSettings } = useSettingsStore();
   const containerRef = useRef<HTMLDivElement>(null);
 
   const [dayWidth, setDayWidth] = useState(VIEW_BASE.day);
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set());
-  const [typeFilter, setTypeFilter] = useState<Set<string>>(new Set());
+  const [statusFilter, setStatusFilter] = useState<Set<string>>(() => {
+    try {
+      const raw = useSettingsStore.getState().settings[FILTERS_KEY];
+      if (raw) {
+        const f = JSON.parse(raw) as SavedFilters;
+        return new Set(f.status || []);
+      }
+    } catch { /* ignore */ }
+    return new Set<string>();
+  });
+  const [typeFilter, setTypeFilter] = useState<Set<string>>(() => {
+    try {
+      const raw = useSettingsStore.getState().settings[FILTERS_KEY];
+      if (raw) {
+        const f = JSON.parse(raw) as SavedFilters;
+        return new Set(f.type || []);
+      }
+    } catch { /* ignore */ }
+    return new Set<string>();
+  });
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [showTypeDropdown, setShowTypeDropdown] = useState(false);
   const [histories, setHistories] = useState<ProjectStatusHistory[]>([]);
@@ -49,6 +76,43 @@ export default function GanttPage() {
   const [hoveredMousePos, setHoveredMousePos] = useState<{ x: number; y: number } | null>(null);
   const [milestoneProject, setMilestoneProject] = useState<Project | null>(null);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+
+  // 持久化筛选条件到 settings（与 ProjectListPage 共享同一 key）
+  const persistFilters = useCallback((status: Set<string>, type: Set<string>) => {
+    // 保留 ProjectListPage 的日期筛选字段
+    let existing: SavedFilters = { status: [], type: [], startDate: "", endDate: "" };
+    try {
+      const raw = useSettingsStore.getState().settings[FILTERS_KEY];
+      if (raw) existing = JSON.parse(raw) as SavedFilters;
+    } catch { /* ignore */ }
+    const f: SavedFilters = {
+      status: Array.from(status),
+      type: Array.from(type),
+      startDate: existing.startDate,
+      endDate: existing.endDate,
+    };
+    saveSettings({ [FILTERS_KEY]: JSON.stringify(f) }).catch(() => {});
+  }, [saveSettings]);
+
+  // 监听 settings 变化，同步从 ProjectListPage 写入的筛选条件
+  useEffect(() => {
+    try {
+      const raw = settings[FILTERS_KEY];
+      if (raw) {
+        const f = JSON.parse(raw) as SavedFilters;
+        setStatusFilter((prev) => {
+          const next = new Set(f.status || []);
+          if (JSON.stringify(Array.from(prev).sort()) !== JSON.stringify(Array.from(next).sort())) return next;
+          return prev;
+        });
+        setTypeFilter((prev) => {
+          const next = new Set(f.type || []);
+          if (JSON.stringify(Array.from(prev).sort()) !== JSON.stringify(Array.from(next).sort())) return next;
+          return prev;
+        });
+      }
+    } catch { /* ignore */ }
+  }, [settings]);
 
   const currentViewMode = getViewMode(dayWidth);
 
@@ -90,6 +154,11 @@ export default function GanttPage() {
     [parsedStatuses],
   );
 
+  const getTypeConfig = useCallback(
+    (typeId?: string | null) => parsedTypes.find((t) => t.id === typeId),
+    [parsedTypes],
+  );
+
   const milestonesByProject = useMemo(() => {
     const map = new Map<number, ProjectMilestone[]>();
     for (const m of milestones) {
@@ -99,6 +168,16 @@ export default function GanttPage() {
     }
     return map;
   }, [milestones]);
+
+  const historiesByProject = useMemo(() => {
+    const map = new Map<number, ProjectStatusHistory[]>();
+    for (const h of histories) {
+      const list = map.get(h.project_id) || [];
+      list.push(h);
+      map.set(h.project_id, list);
+    }
+    return map;
+  }, [histories]);
 
   // 从完整配置提取可用状态（而非仅从 projects 中已有的）
   const availableStatuses = useMemo(() => parsedStatuses.map((s) => s.id), [parsedStatuses]);
@@ -215,11 +294,15 @@ export default function GanttPage() {
     set: Set<string>,
     setter: (s: Set<string>) => void,
     value: string,
+    filterKey: "status" | "type",
   ) => {
     const next = new Set(set);
     if (next.has(value)) next.delete(value);
     else next.add(value);
     setter(next);
+    // 同步到 settings
+    if (filterKey === "status") persistFilters(next, typeFilter);
+    else persistFilters(statusFilter, next);
   };
 
   if (loading) {
@@ -246,10 +329,9 @@ export default function GanttPage() {
         }}
       >
         <div className="flex items-center gap-2.5">
-          <h1 className="text-title font-serif" style={{ color: "var(--text-primary)" }}>
+          <h1 className="text-title" style={{ color: "var(--text-primary)" }}>
             全局甘特图
           </h1>
-          <div className="w-6 h-[2px] rounded-full" style={{ background: "var(--gold)", opacity: 0.6 }} />
         </div>
         <span className="text-xs" style={{ color: "var(--text-muted)" }}>
           {filteredProjects.length} 个项目
@@ -289,7 +371,7 @@ export default function GanttPage() {
               selected={statusFilter}
               getLabel={(id) => getStatusConfig(id)?.name || id}
               getColor={(id) => getStatusConfig(id)?.color}
-              onToggle={(v) => toggleFilter(statusFilter, setStatusFilter, v)}
+              onToggle={(v) => toggleFilter(statusFilter, setStatusFilter, v, "status")}
               onClose={() => setShowStatusDropdown(false)}
             />
           )}
@@ -313,7 +395,7 @@ export default function GanttPage() {
               items={availableTypes}
               selected={typeFilter}
               getLabel={(v) => parsedTypes.find(t => t.id === v)?.name || v}
-              onToggle={(v) => toggleFilter(typeFilter, setTypeFilter, v)}
+              onToggle={(v) => toggleFilter(typeFilter, setTypeFilter, v, "type")}
               onClose={() => setShowTypeDropdown(false)}
             />
           )}
@@ -385,7 +467,7 @@ export default function GanttPage() {
                   ? yearMonthLabels.map((m, i) => (
                       <div
                         key={i}
-                        className="shrink-0 text-center font-serif font-medium py-1 border-r whitespace-nowrap overflow-hidden"
+                        className="shrink-0 text-center font-medium py-1 border-r whitespace-nowrap overflow-hidden"
                         style={{
                           width: m.span * dayWidth,
                           color: "var(--text-secondary)",
@@ -399,7 +481,7 @@ export default function GanttPage() {
                   : monthLabels.map((m, i) => (
                       <div
                         key={i}
-                        className="shrink-0 text-center text-[10px] font-serif font-medium py-1 border-r whitespace-nowrap overflow-hidden"
+                        className="shrink-0 text-center text-[10px] font-medium py-1 border-r whitespace-nowrap overflow-hidden"
                         style={{
                           width: m.span * dayWidth,
                           color: "var(--text-secondary)",
@@ -435,7 +517,7 @@ export default function GanttPage() {
                     return (
                       <div
                         key={i}
-                        className="shrink-0 text-center text-[9px] font-mono py-0.5 border-r"
+                        className="shrink-0 text-center text-[9px] py-0.5 border-r"
                         style={{
                           width: dayWidth,
                           fontWeight: d === 1 ? 600 : 400,
@@ -480,7 +562,7 @@ export default function GanttPage() {
                   totalDays={totalDays}
                   dayWidth={dayWidth}
                   getStatusConfig={getStatusConfig}
-                  histories={histories.filter((h) => h.project_id === project.id)}
+                  histories={historiesByProject.get(project.id) || []}
                   milestones={milestonesByProject.get(project.id) || []}
                   onEditStatusHistory={() => setEditingProject(project)}
                   onNavigate={() => navigate(`/project/${project.id}`)}
@@ -499,7 +581,8 @@ export default function GanttPage() {
           project={hoveredProject}
           mousePos={hoveredMousePos}
           getStatusConfig={getStatusConfig}
-          histories={histories.filter((h) => h.project_id === hoveredProject.id)}
+          getTypeConfig={getTypeConfig}
+          histories={historiesByProject.get(hoveredProject.id) || []}
           onClose={() => { setHoveredProject(null); setHoveredMousePos(null); }}
         />
       )}
@@ -518,7 +601,7 @@ export default function GanttPage() {
       {editingProject && (
         <StatusHistoryModal
           project={editingProject}
-          histories={histories.filter((h) => h.project_id === editingProject.id)}
+          histories={historiesByProject.get(editingProject.id) || []}
           statuses={parsedStatuses}
           onClose={() => setEditingProject(null)}
           onRefresh={refreshHistories}

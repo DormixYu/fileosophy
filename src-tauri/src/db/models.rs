@@ -177,6 +177,23 @@ pub struct User {
     pub created_at: String,
 }
 
+/// 共享项目关系
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SharedProject {
+    pub id: i64,
+    pub local_project_id: Option<i64>,
+    pub remote_addr: String,
+    pub remote_root_path: String,
+    pub remote_project_name: String,
+    pub remote_owner: String,
+    #[serde(skip_serializing)]
+    pub password: String,
+    pub role: String, // "owner" | "member"
+    pub last_synced: Option<String>,
+    pub status: String, // "connected" | "disconnected"
+    pub created_at: String,
+}
+
 /// 扫描到的文件夹信息（用于文件夹导入）
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ScannedFolder {

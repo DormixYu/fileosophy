@@ -115,17 +115,17 @@ export default function ShareProjectDialog({
       <div className="space-y-3">
         {/* 项目信息 */}
         <div className="text-xs" style={{ color: "var(--text-muted)" }}>
-          <div className="font-serif mb-1" style={{ color: "var(--text-secondary)" }}>
+          <div className="mb-1" style={{ color: "var(--text-secondary)" }}>
             {project.name}
           </div>
-          <code className="font-mono text-[11px]">
+          <code className="text-[11px]">
             {project.project_number || "—"}
           </code>
         </div>
 
         {/* 文件夹路径 */}
         <div
-          className="p-2 rounded-md text-[11px] font-mono break-all"
+          className="p-2 rounded-md text-[11px] break-all"
           style={{
             background: "var(--bg-surface-alt)",
             color: "var(--text-tertiary)",
@@ -151,7 +151,7 @@ export default function ShareProjectDialog({
               title="点击复制"
             >
               <code
-                className="flex-1 font-mono text-sm tracking-wide"
+                className="flex-1 text-sm tracking-wide"
                 style={{ color: "var(--gold)" }}
               >
                 {localIp}:{port}

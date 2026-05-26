@@ -31,6 +31,9 @@ import type {
   ClientInfo,
   RemoteDirEntry,
   ActivityLogEntry,
+  SharedConnection,
+  SharedProject,
+  RemoteProjectInfo,
 } from "@/types";
 
 // ── 项目管理 ──────────────────────────────────────────────────
@@ -341,6 +344,41 @@ export const shareApi = {
 
   uploadRemote: (addr: string, password: string, remoteDir: string, fileName: string, localPath: string) =>
     invoke<void>("upload_remote_file", { addr, password, remoteDir, fileName, localPath }),
+
+  // 共享连接管理（密码持久化）
+  getConnections: () => invoke<SharedConnection[]>("get_shared_connections"),
+
+  getConnectionPassword: (addr: string) =>
+    invoke<string>("get_connection_password", { addr }),
+
+  saveConnection: (addr: string, password: string, label: string) =>
+    invoke<void>("save_shared_connection", { addr, password, label }),
+
+  deleteConnection: (addr: string) =>
+    invoke<void>("delete_shared_connection", { addr }),
+
+  updateConnection: (addr: string, lastPath?: string) =>
+    invoke<void>("update_shared_connection", { addr, lastPath }),
+
+  testConnection: (addr: string, password: string) =>
+    invoke<boolean>("test_shared_connection", { addr, password }),
+
+  migrateLegacy: () => invoke<void>("migrate_legacy_connections"),
+
+  // 共享项目管理
+  getSharedProjects: () => invoke<SharedProject[]>("get_shared_projects"),
+
+  importProject: (addr: string, password: string, rootPath: string) =>
+    invoke<number>("import_shared_project", { addr, password, rootPath }),
+
+  syncProject: (sharedProjectId: number) =>
+    invoke<void>("sync_shared_project", { sharedProjectId }),
+
+  disconnectProject: (sharedProjectId: number, deleteLocal: boolean) =>
+    invoke<void>("disconnect_shared_project", { sharedProjectId, deleteLocal }),
+
+  getRemoteProjectInfo: (addr: string, password: string) =>
+    invoke<RemoteProjectInfo>("get_remote_project_info", { addr, password }),
 };
 
 // ── 系统工具 ──────────────────────────────────────────────────

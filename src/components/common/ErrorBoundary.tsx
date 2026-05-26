@@ -12,6 +12,7 @@ export default class ErrorBoundary extends React.Component<
   state: State = { hasError: false, error: null };
 
   static getDerivedStateFromError(error: Error): State {
+    console.error("[ErrorBoundary]", error);
     return { hasError: true, error };
   }
 
@@ -50,9 +51,9 @@ export default class ErrorBoundary extends React.Component<
             />
           </svg>
 
-          {/* 标题 — font-serif */}
+          {/* 标题 — */}
           <h2
-            className="font-serif text-lg tracking-wide"
+            className="text-lg tracking-wide"
             style={{ color: "var(--text-primary)" }}
           >
             页面出现了问题
@@ -65,7 +66,7 @@ export default class ErrorBoundary extends React.Component<
           />
 
           {/* 错误信息 */}
-          <p className="text-xs font-mono text-center max-w-md" style={{ color: "var(--text-muted)" }}>
+          <p className="text-xs text-center max-w-md" style={{ color: "var(--text-muted)" }}>
             {this.state.error?.message}
           </p>
 

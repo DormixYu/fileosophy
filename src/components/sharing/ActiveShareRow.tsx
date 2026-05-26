@@ -6,6 +6,7 @@ import { useNotificationStore } from "@/stores/useNotificationStore";
 import { formatSize, formatTimeShort } from "@/lib/formatUtils";
 import type { Project } from "@/types";
 import { DEFAULT_PROJECT_STATUSES } from "@/types";
+import { ConfirmDialog } from "@/components/common/Modal";
 
 export function normalizePath(p: string): string {
   return p
@@ -28,6 +29,7 @@ export default function ActiveShareRow({ share, project }: ActiveShareRowProps) 
   const { localIp, connectedClients, activityLog, stopShare, fetchActivityLog, fetchConnectedClients } = useShareStore();
   const { addToast } = useNotificationStore();
   const [showActivity, setShowActivity] = useState(false);
+  const [confirmStop, setConfirmStop] = useState(false);
 
   useEffect(() => {
     fetchActivityLog(share.port);
@@ -53,12 +55,18 @@ export default function ActiveShareRow({ share, project }: ActiveShareRowProps) 
     }
   };
 
-  const handleStop = async () => {
+  const handleStop = () => {
+    setConfirmStop(true);
+  };
+
+  const confirmStopShare = async () => {
     try {
       await stopShare(share.port);
       addToast({ type: "info", title: "共享已停止", message: pathName });
     } catch (e) {
       addToast({ type: "error", title: "停止失败", message: String(e) });
+    } finally {
+      setConfirmStop(false);
     }
   };
 
@@ -70,16 +78,16 @@ export default function ActiveShareRow({ share, project }: ActiveShareRowProps) 
           {project ? (
             <Link
               to={`/project/${project.id}`}
-              className="font-serif text-sm text-gold hover-gold-text"
+              className="text-sm text-gold hover-gold-text"
             >
               {project.name}
             </Link>
           ) : (
-            <span className="font-serif text-sm" style={{ color: "var(--text-primary)" }}>
+            <span className="text-sm" style={{ color: "var(--text-primary)" }}>
               {pathName}
             </span>
           )}
-          <p className="text-xs font-mono truncate mt-0.5" style={{ color: "var(--text-tertiary)" }}>
+          <p className="text-xs truncate mt-0.5" style={{ color: "var(--text-tertiary)" }}>
             {project?.project_number || "—"}
           </p>
         </div>
@@ -87,7 +95,7 @@ export default function ActiveShareRow({ share, project }: ActiveShareRowProps) 
         {/* 状态 */}
         {statusInfo && (
           <span
-            className="shrink-0 rounded-full text-[10px] px-2.5 py-0.5 font-mono"
+            className="shrink-0 rounded-full text-[10px] px-2.5 py-0.5"
             style={{
               background: `${statusInfo.color}18`,
               border: `1px solid ${statusInfo.color}30`,
@@ -106,7 +114,7 @@ export default function ActiveShareRow({ share, project }: ActiveShareRowProps) 
 
         {/* 共享地址 */}
         <div className="shrink-0 flex items-center gap-1.5">
-          <span className="font-mono text-xs text-gold">
+          <span className="text-xs text-gold">
             {fullAddr}
           </span>
           <button
@@ -153,19 +161,15 @@ export default function ActiveShareRow({ share, project }: ActiveShareRowProps) 
           style={{ background: "var(--bg-surface-alt)", border: "1px solid var(--border-light)" }}
         >
           <div className="flex items-center gap-2 mb-2">
-            <p className="text-xs font-serif" style={{ color: "var(--text-secondary)" }}>
+            <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
               活动记录
             </p>
-            <div
-              className="w-6 h-[1px] rounded-full"
-              style={{ background: "var(--gold)", opacity: 0.4 }}
-            />
           </div>
           <div className="space-y-1">
             {recentActivity.map((entry, i) => (
               <div
                 key={i}
-                className="flex items-center gap-2 text-[11px] font-mono px-2 py-1 rounded-md transition-colors hover-surface-alt-bg"
+                className="flex items-center gap-2 text-[11px] px-2 py-1 rounded-md transition-colors hover-surface-alt-bg"
                 style={{ color: "var(--text-tertiary)" }}
               >
                 <span>{formatTimeShort(entry.timestamp)}</span>
@@ -186,6 +190,16 @@ export default function ActiveShareRow({ share, project }: ActiveShareRowProps) 
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmStop}
+        title="停止共享"
+        message={`确定停止共享"${pathName}"？正在连接的客户端将被断开。`}
+        confirmLabel="停止共享"
+        danger
+        onConfirm={confirmStopShare}
+        onClose={() => setConfirmStop(false)}
+      />
     </div>
   );
 }

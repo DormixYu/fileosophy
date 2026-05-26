@@ -80,7 +80,7 @@ export default function JoinShareDialog({ onClose }: { onClose: () => void }) {
                 onChange={(e) => setAddr(e.target.value)}
                 placeholder="192.168.1.5:54321"
                 autoFocus
-                className="w-full px-3 py-2 text-sm rounded-md outline-none font-mono"
+                className="w-full px-3 py-2 text-sm rounded-md outline-none"
                 style={{
                   background: "var(--bg-surface-alt)",
                   border: "1px solid var(--border-default)",

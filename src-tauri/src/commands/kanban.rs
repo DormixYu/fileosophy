@@ -1,7 +1,8 @@
 use crate::db::DbConn;
 use crate::db::models::{GanttTask, KanbanBoard, KanbanCard, KanbanColumn};
 use crate::events;
-use tauri::{AppHandle, State};
+use super::gantt::row_to_gantt_task;
+use tauri::{AppHandle, Emitter, State};
 
 /// 从行构造 KanbanColumn（含 column_type）
 fn row_to_column(row: &rusqlite::Row) -> rusqlite::Result<KanbanColumn> {
@@ -59,13 +60,13 @@ pub fn get_kanban_board(db: State<'_, DbConn>, project_id: i64) -> Result<Kanban
         columns.push(row.map_err(|e| e.to_string())?);
     }
 
-    for col in &mut columns {
-        let mut card_stmt = conn
-            .prepare(&format!(
-                "SELECT {CARD_SELECT} FROM kanban_cards WHERE column_id = ?1 ORDER BY position"
-            ))
-            .map_err(|e| e.to_string())?;
+    let mut card_stmt = conn
+        .prepare(&format!(
+            "SELECT {CARD_SELECT} FROM kanban_cards WHERE column_id = ?1 ORDER BY position"
+        ))
+        .map_err(|e| e.to_string())?;
 
+    for col in &mut columns {
         let card_rows = card_stmt
             .query_map([col.id], row_to_card)
             .map_err(|e| e.to_string())?;
@@ -80,6 +81,7 @@ pub fn get_kanban_board(db: State<'_, DbConn>, project_id: i64) -> Result<Kanban
 
 #[tauri::command]
 pub fn add_column(
+    app: AppHandle,
     db: State<'_, DbConn>,
     project_id: i64,
     title: String,
@@ -105,12 +107,17 @@ pub fn add_column(
 
     let id = conn.last_insert_rowid();
 
-    conn.query_row(
+    let column = conn.query_row(
         &format!("SELECT {COLUMN_SELECT} FROM kanban_columns WHERE id = ?1"),
         [id],
         row_to_column,
     )
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string())?;
+
+    drop(conn);
+    let _ = app.emit(events::EVENT_PROJECT_UPDATED, serde_json::json!({ "project_id": project_id }));
+
+    Ok(column)
 }
 
 #[tauri::command]
@@ -144,22 +151,26 @@ pub fn create_card(
 
     let id = conn.last_insert_rowid();
 
-    conn.query_row(
+    let card = conn.query_row(
         &format!("SELECT {CARD_SELECT} FROM kanban_cards WHERE id = ?1"),
         [id],
         row_to_card,
-    )
-    .map_err(|e| e.to_string())
-    .inspect(|card| {
-        if let Ok(project_id) = conn.query_row(
-            "SELECT project_id FROM kanban_columns WHERE id = ?1",
-            [card.column_id],
-            |row| row.get::<_, i64>(0),
-        ) {
-            let link = format!("/project/{}", project_id);
-            events::emit_notification(&app, "info", "新卡片", &card.title, Some(&link));
-        }
-    })
+    ).map_err(|e| e.to_string())?;
+
+    let project_id: Option<i64> = conn.query_row(
+        "SELECT project_id FROM kanban_columns WHERE id = ?1",
+        [card.column_id],
+        |row| row.get(0),
+    ).ok();
+
+    drop(conn);
+
+    if let Some(pid) = project_id {
+        let link = format!("/project/{}", pid);
+        events::emit_notification_checked(&app, db.inner(), "card_created", "info", "新卡片", &card.title, Some(&link));
+    }
+
+    Ok(card)
 }
 
 #[tauri::command]
@@ -178,6 +189,21 @@ pub fn move_card(
         [card_id],
         |row| Ok((row.get(0)?, row.get(1)?)),
     ).map_err(|e| e.to_string())?;
+
+    // 校验源列和目标列属于同一项目
+    let source_project: i64 = conn.query_row(
+        "SELECT project_id FROM kanban_columns WHERE id = ?1",
+        [source_column_id],
+        |row| row.get(0),
+    ).map_err(|_| "源列不存在".to_string())?;
+    let target_project: i64 = conn.query_row(
+        "SELECT project_id FROM kanban_columns WHERE id = ?1",
+        [target_column_id],
+        |row| row.get(0),
+    ).map_err(|_| "目标列不存在".to_string())?;
+    if source_project != target_project {
+        return Err("不能将卡片移动到其他项目的列".to_string());
+    }
 
     // 读取 source 和 target 列的 column_type
     let source_type: Option<String> = conn.query_row(
@@ -221,14 +247,18 @@ pub fn move_card(
         "SELECT project_id FROM kanban_columns WHERE id = ?1", [target_column_id],
         |row| row.get(0),
     ).ok();
+
+    drop(conn);
+
     let link = project_id.map(|pid| format!("/project/{}", pid));
-    events::emit_notification(&app, "info", "卡片移动", &format!("{} → {}", card_title, col_title), link.as_deref());
+    events::emit_notification_checked(&app, db.inner(), "card_moved", "info", "卡片移动", &format!("{} → {}", card_title, col_title), link.as_deref());
 
     Ok(())
 }
 
 #[tauri::command]
 pub fn update_column(
+    app: AppHandle,
     db: State<'_, DbConn>,
     column_id: i64,
     title: String,
@@ -242,42 +272,81 @@ pub fn update_column(
     )
     .map_err(|e| e.to_string())?;
 
-    conn.query_row(
+    let project_id: Option<i64> = conn.query_row(
+        "SELECT project_id FROM kanban_columns WHERE id = ?1",
+        [column_id],
+        |row| row.get(0),
+    ).ok();
+
+    let column = conn.query_row(
         &format!("SELECT {COLUMN_SELECT} FROM kanban_columns WHERE id = ?1"),
         [column_id],
         row_to_column,
     )
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string())?;
+
+    drop(conn);
+    if let Some(pid) = project_id {
+        let _ = app.emit(events::EVENT_PROJECT_UPDATED, serde_json::json!({ "project_id": pid }));
+    }
+
+    Ok(column)
 }
 
 #[tauri::command]
 pub fn delete_column(
+    app: AppHandle,
     db: State<'_, DbConn>,
     column_id: i64,
 ) -> Result<(), String> {
     let conn = db.lock().map_err(|e| e.to_string())?;
 
+    let project_id: Option<i64> = conn.query_row(
+        "SELECT project_id FROM kanban_columns WHERE id = ?1",
+        [column_id],
+        |row| row.get(0),
+    ).ok();
+
     conn.execute("DELETE FROM kanban_columns WHERE id = ?1", [column_id])
         .map_err(|e| e.to_string())?;
+
+    drop(conn);
+    if let Some(pid) = project_id {
+        let _ = app.emit(events::EVENT_PROJECT_UPDATED, serde_json::json!({ "project_id": pid }));
+    }
 
     Ok(())
 }
 
 #[tauri::command]
 pub fn delete_card(
+    app: AppHandle,
     db: State<'_, DbConn>,
     card_id: i64,
 ) -> Result<(), String> {
     let conn = db.lock().map_err(|e| e.to_string())?;
 
+    // 获取卡片所属项目 ID（用于事件通知）
+    let project_id: Option<i64> = conn.query_row(
+        "SELECT kc.project_id FROM kanban_cards c JOIN kanban_columns kc ON c.column_id = kc.id WHERE c.id = ?1",
+        [card_id],
+        |row| row.get(0),
+    ).ok();
+
     conn.execute("DELETE FROM kanban_cards WHERE id = ?1", [card_id])
         .map_err(|e| e.to_string())?;
+
+    drop(conn);
+    if let Some(pid) = project_id {
+        let _ = app.emit(events::EVENT_PROJECT_UPDATED, serde_json::json!({ "project_id": pid }));
+    }
 
     Ok(())
 }
 
 #[tauri::command]
 pub fn update_card(
+    app: AppHandle,
     db: State<'_, DbConn>,
     card_id: i64,
     title: Option<String>,
@@ -334,12 +403,26 @@ pub fn update_card(
             .map_err(|e| e.to_string())?;
     }
 
-    conn.query_row(
+    let card = conn.query_row(
         &format!("SELECT {CARD_SELECT} FROM kanban_cards WHERE id = ?1"),
         [card_id],
         row_to_card,
     )
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string())?;
+
+    // 获取项目 ID 并发射事件
+    let project_id: Option<i64> = conn.query_row(
+        "SELECT kc.project_id FROM kanban_cards c JOIN kanban_columns kc ON c.column_id = kc.id WHERE c.id = ?1",
+        [card_id],
+        |row| row.get(0),
+    ).ok();
+
+    drop(conn);
+    if let Some(pid) = project_id {
+        let _ = app.emit(events::EVENT_PROJECT_UPDATED, serde_json::json!({ "project_id": pid }));
+    }
+
+    Ok(card)
 }
 
 // ── 看板与甘特图联动命令 ────────────────────────────────────────────
@@ -400,20 +483,7 @@ pub fn link_card_to_gantt(
     let task = conn.query_row(
         "SELECT id, project_id, name, start_date, duration_days, dependencies, progress, created_at FROM gantt_tasks WHERE id = ?1",
         [task_id],
-        |row| {
-            let deps_str: String = row.get(5)?;
-            let deps: Vec<i64> = serde_json::from_str(&deps_str).unwrap_or_default();
-            Ok(GanttTask {
-                id: row.get(0)?,
-                project_id: row.get(1)?,
-                name: row.get(2)?,
-                start_date: row.get(3)?,
-                duration_days: row.get(4)?,
-                dependencies: deps,
-                progress: row.get(6)?,
-                created_at: row.get(7)?,
-            })
-        },
+        row_to_gantt_task,
     ).map_err(|e| e.to_string())?;
 
     Ok(LinkCardResult { card, task })

@@ -147,7 +147,7 @@ export default function ExportDialog({ open, onClose }: { open: boolean; onClose
               {projects.map(p => (
                 <label key={p.id} className="flex items-center gap-2 px-3 py-1.5 rounded-md cursor-pointer hover-gold-bg" style={{ color: "var(--text-primary)" }}>
                   <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleId(p.id)} className="rounded" />
-                  <span className="text-xs font-mono" style={{ color: "var(--text-muted)" }}>{p.project_number || "-"}</span>
+                  <span className="text-xs" style={{ color: "var(--text-muted)" }}>{p.project_number || "-"}</span>
                   <span className="text-xs truncate">{p.name}</span>
                 </label>
               ))}
@@ -182,14 +182,14 @@ export default function ExportDialog({ open, onClose }: { open: boolean; onClose
                 }}
                 onClick={() => setSelectedProjectId(p.id)}
               >
-                <span className="font-mono" style={{ color: "var(--text-muted)" }}>{p.project_number || "-"}</span>
+                <span className="" style={{ color: "var(--text-muted)" }}>{p.project_number || "-"}</span>
                 {" "}{p.name}
                 {!p.folder_path && <span style={{ color: "var(--color-danger)", marginLeft: 8 }}>(未关联文件夹)</span>}
               </button>
             ))}
           </div>
           {selectedProjectId && (
-            <p className="text-xs mt-2 font-mono" style={{ color: "var(--text-muted)" }}>
+            <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>
               文件夹: {projects.find(p => p.id === selectedProjectId)?.folder_path || "无"}
             </p>
           )}

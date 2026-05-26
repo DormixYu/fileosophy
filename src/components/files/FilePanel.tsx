@@ -87,7 +87,7 @@ export default function FilePanel({ projectId }: Props) {
       }
       await fetchFiles();
     } catch (e) {
-      console.error("Upload failed:", e);
+      addToast({ type: "error", title: "上传失败", message: String(e) });
     }
   };
 
@@ -104,7 +104,7 @@ export default function FilePanel({ projectId }: Props) {
       await fileApi.delete(fileId);
       setFiles((prev) => prev.filter((f) => f.id !== fileId));
     } catch (e) {
-      console.error("Delete failed:", e);
+      addToast({ type: "error", title: "删除失败", message: String(e) });
     }
   };
 
@@ -189,18 +189,9 @@ export default function FilePanel({ projectId }: Props) {
       {/* 标题栏 — 鎏金装饰 */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div
-            className="w-1 h-5 shrink-0 rounded-full"
-            style={{ background: "var(--gold)" }}
-          />
-          <h3 className="font-serif text-base tracking-wide" style={{ color: "var(--text-primary)" }}>
+          <h3 className="text-base" style={{ color: "var(--text-primary)" }}>
             文件
           </h3>
-          {/* 鎏金装饰细线 */}
-          <div
-            className="w-8 h-px shrink-0"
-            style={{ background: "var(--gold)", opacity: 0.35 }}
-          />
         </div>
         <div className="flex items-center gap-2">
           <button

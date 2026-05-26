@@ -242,7 +242,7 @@ export default function ImportDialog({ open, onClose }: { open: boolean; onClose
                     <div className="flex items-center gap-2">
                       <input type="checkbox" checked={row.selected} onChange={() => toggleRowSelect(idx)} className="rounded" />
                       <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: conf.dot }} />
-                      <span className="text-xs truncate font-serif flex-1" style={{ color: "var(--text-primary)" }}>
+                      <span className="text-xs truncate flex-1" style={{ color: "var(--text-primary)" }}>
                         {row.folder_name}
                       </span>
                       {row.conflict_reason && (

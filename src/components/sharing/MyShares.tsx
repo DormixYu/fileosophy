@@ -6,14 +6,14 @@ import { useNotificationStore } from "@/stores/useNotificationStore";
 import ActiveShareRow, { normalizePath } from "@/components/sharing/ActiveShareRow";
 import ConnectedPeerRow from "@/components/sharing/ConnectedPeerRow";
 import RemoteFileBrowser from "@/components/sharing/RemoteFileBrowser";
-import type { SavedConnection } from "@/types";
+import type { SharedConnection } from "@/types";
 
 export default function MyShares() {
   const { shareStatus, savedConnections, startShare } = useShareStore();
   const { projects } = useProjectStore();
   const { addToast } = useNotificationStore();
 
-  const [browsingConn, setBrowsingConn] = useState<SavedConnection | null>(null);
+  const [browsingConn, setBrowsingConn] = useState<SharedConnection | null>(null);
   const [showStartDialog, setShowStartDialog] = useState(false);
   const [sharePath, setSharePath] = useState("");
   const [sharePassword, setSharePassword] = useState("");
@@ -70,7 +70,7 @@ export default function MyShares() {
         >
           <Share2 size={24} strokeWidth={1.5} style={{ color: "var(--gold)" }} />
         </div>
-        <p className="text-sm font-serif" style={{ color: "var(--text-secondary)" }}>
+        <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
           暂无共享活动
         </p>
         <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
@@ -89,7 +89,7 @@ export default function MyShares() {
             className="mt-4 p-4 rounded-lg space-y-3"
             style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)" }}
           >
-            <p className="text-xs font-mono truncate" style={{ color: "var(--text-tertiary)" }}>
+            <p className="text-xs truncate" style={{ color: "var(--text-tertiary)" }}>
               {sharePath}
             </p>
             <input
@@ -128,13 +128,9 @@ export default function MyShares() {
       {hasShares ? (
         <div>
           <div className="flex items-center gap-3 mb-3">
-            <h2 className="text-title font-serif" style={{ color: "var(--text-primary)" }}>
+            <h2 className="text-lg" style={{ color: "var(--text-primary)" }}>
               正在分享
             </h2>
-            <div
-              className="w-8 h-[2px] rounded-full"
-              style={{ background: "var(--gold)", opacity: 0.5 }}
-            />
             <button className="btn btn-ghost btn-sm ml-auto" onClick={handleSelectFolder}>
               <FolderOpen size={12} strokeWidth={1.5} />
               添加共享
@@ -154,7 +150,7 @@ export default function MyShares() {
               className="mt-3 p-4 rounded-lg space-y-3"
               style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)" }}
             >
-              <p className="text-xs font-mono truncate" style={{ color: "var(--text-tertiary)" }}>
+              <p className="text-xs truncate" style={{ color: "var(--text-tertiary)" }}>
                 {sharePath}
               </p>
               <input
@@ -194,13 +190,9 @@ export default function MyShares() {
       {hasConnections ? (
         <div>
           <div className="flex items-center gap-3 mb-3">
-            <h2 className="text-title font-serif" style={{ color: "var(--text-primary)" }}>
+            <h2 className="text-lg" style={{ color: "var(--text-primary)" }}>
               已连接项目
             </h2>
-            <div
-              className="w-8 h-[2px] rounded-full"
-              style={{ background: "var(--gold)", opacity: 0.5 }}
-            />
           </div>
           <div className="space-y-2">
             {savedConnections.map((conn) => (

@@ -93,8 +93,10 @@ export default function GlobalSearch({ open, onClose }: Props) {
   const handleResultClick = (item: SearchResult) => {
     onClose();
     const { result_type, project_id } = item;
-    if (result_type === "project") {
-      navigate(`/project/${project_id}`);
+    if (result_type === "card") {
+      navigate(`/project/${project_id}?tab=kanban`);
+    } else if (result_type === "task") {
+      navigate(`/project/${project_id}?tab=gantt`);
     } else {
       navigate(`/project/${project_id}`);
     }

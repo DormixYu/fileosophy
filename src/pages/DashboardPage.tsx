@@ -159,7 +159,7 @@ export default function DashboardPage() {
             />
           ) : (
             <div
-              className="w-11 h-11 rounded-full flex items-center justify-center text-sm font-serif shrink-0"
+              className="w-11 h-11 rounded-full flex items-center justify-center text-sm font-medium shrink-0"
               style={{ background: "var(--gold-glow-strong)", color: "var(--gold)", border: "2px solid var(--gold)" }}
             >
               {user?.name ? getInitials(user.name) : "?"}
@@ -167,10 +167,9 @@ export default function DashboardPage() {
           )}
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-title font-serif mb-0" style={{ color: "var(--text-primary)" }}>
+              <h1 className="text-title mb-0" style={{ color: "var(--text-primary)" }}>
                 {user?.name ? `欢迎回来，${user.name}` : "概览"}
               </h1>
-              <div className="w-6 h-[2px] rounded-full" style={{ background: "var(--gold)", opacity: 0.6 }} />
             </div>
           </div>
         </div>
@@ -181,7 +180,7 @@ export default function DashboardPage() {
 
       {/* 统计卡片 */}
       <div className="flex items-center justify-between mb-4">
-        <span className="text-lg font-serif" style={{ color: "var(--text-muted)" }}>项目概览</span>
+        <h2 className="text-lg" style={{ color: "var(--text-muted)" }}>项目概览</h2>
         <div className="relative">
           <button
             className="p-1 rounded-md transition-colors hover-gold-bg"
@@ -218,7 +217,7 @@ export default function DashboardPage() {
       {/* 活跃项目区 */}
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
-          <h2 className="text-lg font-serif" style={{ color: "var(--text-primary)" }}>
+          <h2 className="text-lg" style={{ color: "var(--text-primary)" }}>
             活跃项目
           </h2>
           <span className="text-footnote" style={{ color: "var(--text-muted)" }}>
@@ -255,7 +254,7 @@ export default function DashboardPage() {
               className="card card-interactive hover-gold-border group"
             >
               <div className="flex items-start justify-between mb-2">
-                <h3 className="text-callout font-serif leading-snug" style={{ color: "var(--text-primary)" }}>
+                <h3 className="text-callout font-medium leading-snug" style={{ color: "var(--text-primary)" }}>
                   {project.name}
                 </h3>
                 {project.status && (
@@ -399,7 +398,7 @@ function StatCard({
             {label}
           </div>
           <div
-            className="text-xl font-serif truncate"
+            className="text-xl font-medium truncate"
             style={{ color: "var(--text-primary)" }}
           >
             {value}

@@ -103,7 +103,7 @@ export interface CreateProjectData {
   name: string;
   description?: string;
   project_type?: string;
-  status?: string;
+  status?: ProjectStatus;
   start_date?: string;
   end_date?: string;
   created_by?: string;
@@ -114,7 +114,7 @@ export interface UpdateProjectData {
   name?: string;
   description?: string;
   project_type?: string;
-  status?: string;
+  status?: ProjectStatus;
   start_date?: string;
   end_date?: string;
 }
@@ -187,7 +187,7 @@ export interface KanbanCard {
   id: number;
   column_id: number;
   title: string;
-  description: string;
+  description: string | null;
   position: number;
   tags: string[];
   created_at: string;
@@ -342,6 +342,7 @@ export interface Peer {
   name: string;
   host: string;
   port: number;
+  share_port?: number;
   addresses: string[];
   token: string;
 }
@@ -353,6 +354,39 @@ export interface SavedConnection {
   label: string;
   last_connected: string;
   last_path: string;
+}
+
+export interface SharedConnection {
+  id: number;
+  addr: string;
+  label: string;
+  password?: string; // 列表接口不返回，需通过 getConnectionPassword 单独获取
+  last_connected: string | null;
+  last_path: string;
+  created_at: string;
+}
+
+export interface SharedProject {
+  id: number;
+  local_project_id: number | null;
+  remote_addr: string;
+  remote_root_path: string;
+  remote_project_name: string;
+  remote_owner: string;
+  password: string;
+  role: "owner" | "member";
+  last_synced: string | null;
+  status: "connected" | "disconnected";
+  created_at: string;
+}
+
+export interface RemoteProjectInfo {
+  project_name: string;
+  owner: string;
+  description: string | null;
+  status: string | null;
+  start_date: string | null;
+  end_date: string | null;
 }
 
 export interface ClientInfo {
