@@ -15,9 +15,11 @@ interface Props {
   onCardDelete?: (cardId: number) => void;
   onCardComplete?: (cardId: number) => void;
   onAddTask?: (columnId: number) => void;
+  onCardRemoveFileLink?: (cardId: number, filePath: string) => void;
+  onCardAddFileLink?: (card: CardType) => void;
 }
 
-export default function KanbanColumn({ column, onCardClick, onCardDelete, onCardComplete, onAddTask }: Props) {
+export default function KanbanColumn({ column, onCardClick, onCardDelete, onCardComplete, onAddTask, onCardRemoveFileLink, onCardAddFileLink }: Props) {
   const { updateColumn, deleteColumn } = useKanbanStore();
   const { addToast } = useNotificationStore();
   const { setNodeRef: setDroppableRef } = useDroppable({
@@ -50,51 +52,63 @@ export default function KanbanColumn({ column, onCardClick, onCardDelete, onCard
   return (
     <>
       <div
-        className="w-72 shrink-0 rounded-lg flex flex-col max-h-full group/col"
+        className="w-72 shrink-0 rounded-xl flex flex-col max-h-full group/col animate-kanban-column"
         style={{
           background: "var(--bg-surface)",
           border: "1px solid var(--border-default)",
+          backdropFilter: "blur(8px)",
+          boxShadow: "var(--shadow-sm)",
         }}
       >
         {/* 列头 */}
         <div
-          className="flex items-center justify-between px-3 py-2.5 border-b"
+          className="flex items-center gap-2 px-3 py-2.5 border-b"
           style={{ borderColor: "var(--border-light)" }}
         >
           <h3
-            className="text-sm truncate"
+            className="text-[13px] font-semibold flex-1 truncate"
             style={{ color: "var(--text-primary)" }}
           >
             {column.title}
           </h3>
           {column.column_type && (
-            <span className="badge badge-primary ml-1">
+            <span className="badge badge-primary text-[10px]">
               {column.column_type === "todo_pending" ? "待办" : column.column_type === "todo_done" ? "已完成" : ""}
             </span>
           )}
-          <div className="flex items-center gap-0.5 ml-1">
+          <span
+            className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[10px] font-semibold rounded-full"
+            style={{
+              background: "var(--gold-glow)",
+              color: "var(--gold)",
+            }}
+          >
+            {column.cards?.length ?? 0}
+          </span>
+          <div className="flex items-center gap-0.5">
             <button
-              className="p-0.5 rounded opacity-0 group-hover/col:opacity-100 transition-opacity hover-gold-text"
-              style={{ color: "var(--text-muted)" }}
+              className="p-1 rounded-md opacity-0 group-hover/col:opacity-100 transition-opacity"
+              style={{ color: "var(--text-muted)", background: "transparent", border: "none", cursor: "pointer" }}
               aria-label="编辑列名"
               onClick={() => {
                 setRenameTitle(column.title);
                 setShowRename(true);
               }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = "var(--gold)"; e.currentTarget.style.background = "var(--gold-glow)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "transparent"; }}
             >
               <Pencil size={12} strokeWidth={1.5} />
             </button>
             <button
-              className="p-0.5 rounded opacity-0 group-hover/col:opacity-100 transition-opacity hover-danger-text"
-              style={{ color: "var(--text-muted)" }}
+              className="p-1 rounded-md opacity-0 group-hover/col:opacity-100 transition-opacity"
+              style={{ color: "var(--text-muted)", background: "transparent", border: "none", cursor: "pointer" }}
               aria-label="删除列"
               onClick={() => setShowDeleteConfirm(true)}
+              onMouseEnter={(e) => { e.currentTarget.style.color = "var(--color-danger)"; e.currentTarget.style.background = "var(--color-danger-light)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "transparent"; }}
             >
               <Trash2 size={12} strokeWidth={1.5} />
             </button>
-            <span className="badge badge-primary ml-1">
-              {column.cards?.length ?? 0}
-            </span>
           </div>
         </div>
 
@@ -110,13 +124,30 @@ export default function KanbanColumn({ column, onCardClick, onCardDelete, onCard
               onClick={onCardClick ? () => onCardClick(card) : undefined}
               onDelete={onCardDelete ? () => onCardDelete(card.id) : undefined}
               onComplete={onCardComplete && column.column_type === "todo_pending" ? () => onCardComplete(card.id) : undefined}
+              onRemoveFileLink={onCardRemoveFileLink ? (filePath) => onCardRemoveFileLink(card.id, filePath) : undefined}
+              onAddFileLink={onCardAddFileLink ? () => onCardAddFileLink(card) : undefined}
             />
           ))}
 
           <button
             onClick={() => onAddTask?.(column.id)}
-            className="w-full py-1.5 flex items-center justify-center gap-1 text-[10px] rounded transition-colors hover-gold-bg"
-            style={{ color: "var(--text-muted)" }}
+            className="w-full py-2 flex items-center justify-center gap-1.5 text-[11px] rounded-lg transition-all"
+            style={{
+              color: "var(--text-muted)",
+              background: "transparent",
+              border: "1px dashed var(--border-light)",
+              cursor: "pointer",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = "var(--gold)";
+              e.currentTarget.style.color = "var(--gold)";
+              e.currentTarget.style.background = "var(--gold-glow)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = "var(--border-light)";
+              e.currentTarget.style.color = "var(--text-muted)";
+              e.currentTarget.style.background = "transparent";
+            }}
           >
             <Plus size={12} strokeWidth={1.5} />
             添加任务
@@ -189,6 +220,8 @@ function SortableCard({
   onClick,
   onDelete,
   onComplete,
+  onRemoveFileLink,
+  onAddFileLink,
 }: {
   card: CardType;
   columnId: number;
@@ -197,6 +230,8 @@ function SortableCard({
   onClick?: () => void;
   onDelete?: () => void;
   onComplete?: () => void;
+  onRemoveFileLink?: (filePath: string) => void;
+  onAddFileLink?: () => void;
 }) {
   const {
     attributes,
@@ -218,16 +253,16 @@ function SortableCard({
 
   return (
     <div ref={setNodeRef} style={style} {...attributes}>
-      <div className="flex items-start gap-1">
+      <div className="flex items-start gap-1.5">
         <button
           {...listeners}
-          className="mt-2 p-0.5 cursor-grab active:cursor-grabbing"
-          style={{ color: "var(--text-muted)" }}
+          className="mt-3 p-0.5 opacity-0 group-hover/col:opacity-60 transition-opacity"
+          style={{ color: "var(--text-muted)", cursor: "grab", background: "transparent", border: "none" }}
           aria-label="拖拽排序"
         >
           <GripVertical size={12} strokeWidth={1.5} />
         </button>
-        <KanbanCard card={card} columnType={columnType} onComplete={onComplete} onClick={onClick} onDelete={onDelete} />
+        <KanbanCard card={card} columnType={columnType} onComplete={onComplete} onClick={onClick} onDelete={onDelete} onRemoveFileLink={onRemoveFileLink} onAddFileLink={onAddFileLink} index={index} />
       </div>
     </div>
   );

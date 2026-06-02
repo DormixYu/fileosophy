@@ -438,7 +438,7 @@ export default function GanttPage() {
       </div>
 
       {/* 图表区 */}
-      <div ref={containerRef} className="flex-1 overflow-auto" onWheel={handleWheel}>
+      <div ref={containerRef} className="flex-1 overflow-auto" style={{ scrollBehavior: "smooth" }} onWheel={handleWheel}>
         {filteredProjects.length === 0 ? (
           <div
             className="flex items-center justify-center h-full text-sm"
@@ -514,15 +514,16 @@ export default function GanttPage() {
                     const dateStr = formatLocalDate(date);
                     const isToday = dateStr === todayStr;
                     const showDate = currentViewMode === "day" || d === 1 || d === 8 || d === 15 || d === 22;
+                    const isWeekStart = date.getDay() === 1;
                     return (
                       <div
                         key={i}
-                        className="shrink-0 text-center text-[9px] py-0.5 border-r"
+                        className="shrink-0 text-center text-[9px] py-0.5"
                         style={{
                           width: dayWidth,
                           fontWeight: d === 1 ? 600 : 400,
                           color: isToday
-                            ? "#fff"
+                            ? "var(--text-on-primary, #fff)"
                             : isWeekend
                               ? "var(--color-danger)"
                               : "var(--text-muted)",
@@ -531,7 +532,11 @@ export default function GanttPage() {
                             : isWeekend
                               ? "var(--gold-glow)"
                               : "transparent",
-                          borderColor: "var(--border-light)",
+                          borderRight: isWeekStart
+                            ? "1.5px solid var(--border-default)"
+                            : "1px solid var(--border-light)",
+                          borderRadius: isToday ? "var(--radius-sm)" : 0,
+                          transition: "color var(--duration-fast) var(--ease-smooth), background var(--duration-fast) var(--ease-smooth)",
                         }}
                       >
                         {showDate ? d : ""}
@@ -546,13 +551,44 @@ export default function GanttPage() {
             <div style={{ position: "relative" }}>
               {/* 今日线 */}
               <div
-                className="absolute top-0 bottom-0 w-0.5 z-10 pointer-events-none"
+                className="absolute top-0 bottom-0 z-10 pointer-events-none"
                 style={{
-                  left: NAME_WIDTH + daysBetween(minDate, getToday()) * dayWidth,
-                  background: "var(--color-danger)",
-                  opacity: 0.6,
+                  left: NAME_WIDTH + daysBetween(minDate, getToday()) * dayWidth - 0.5,
+                  width: 1,
+                  background: "var(--gold)",
+                  opacity: 0.7,
                 }}
               />
+              {/* 今日线虚线叠加 */}
+              <div
+                className="absolute top-0 bottom-0 z-10 pointer-events-none"
+                style={{
+                  left: NAME_WIDTH + daysBetween(minDate, getToday()) * dayWidth - 0.5,
+                  width: 1,
+                  backgroundImage: "repeating-linear-gradient(to bottom, var(--gold) 0px, var(--gold) 4px, transparent 4px, transparent 8px)",
+                  opacity: 0.4,
+                }}
+              />
+              {/* 今日标签 */}
+              <div
+                className="absolute z-20 pointer-events-none"
+                style={{
+                  left: NAME_WIDTH + daysBetween(minDate, getToday()) * dayWidth,
+                  top: -2,
+                  transform: "translateX(-50%)",
+                }}
+              >
+                <span
+                  className="text-[9px] font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap"
+                  style={{
+                    background: "var(--gold)",
+                    color: "var(--text-on-primary, #fff)",
+                    boxShadow: "0 1px 4px rgba(184, 134, 11, 0.3)",
+                  }}
+                >
+                  今天
+                </span>
+              </div>
 
               {filteredProjects.map((project) => (
                 <GanttRow
@@ -639,7 +675,7 @@ function GanttRow({
   onManageMilestones: () => void;
 }) {
   const statusConfig = getStatusConfig(project.status);
-  const statusColor = statusConfig?.color || "#94a3b8";
+  const statusColor = statusConfig?.color || "var(--text-secondary)";
 
   // 使用 ganttUtils 的 buildSegments 替代有 bug 的内联版本
   const segments = useMemo(
@@ -649,8 +685,8 @@ function GanttRow({
 
   return (
     <div
-      className="flex items-center group transition-colors hover-elevated-bg"
-      style={{ height: ROW_HEIGHT }}
+      className="flex items-center group transition-all duration-150 ease-out hover-elevated-bg"
+      style={{ height: ROW_HEIGHT, borderBottom: "1px solid var(--border-light)" }}
     >
       {/* 冻结项目名称列 + 状态色点 */}
       <div
@@ -690,31 +726,38 @@ function GanttRow({
       <div className="relative flex-1" style={{ height: ROW_HEIGHT }}>
         {/* 背景网格 */}
         <div className="absolute inset-0 flex pointer-events-none">
-          {Array.from({ length: totalDays }, (_, i) => (
-            <div
-              key={i}
-              className="shrink-0 border-r"
-              style={{
-                width: dayWidth,
-                borderColor: "var(--border-light)",
-                opacity: i % 7 === 0 ? 0.5 : 0.2,
-              }}
-            />
-          ))}
+          {Array.from({ length: totalDays }, (_, i) => {
+            const isWeekStart = i % 7 === 0;
+            return (
+              <div
+                key={i}
+                className="shrink-0"
+                style={{
+                  width: dayWidth,
+                  borderRight: isWeekStart
+                    ? "1.5px solid var(--border-default)"
+                    : "1px solid var(--border-light)",
+                  opacity: isWeekStart ? 0.4 : 0.15,
+                }}
+              />
+            );
+          })}
         </div>
 
         {/* 甘特条色段 */}
         {segments.map((seg, i) => (
           <div
             key={i}
-            className="absolute rounded-sm cursor-pointer transition-opacity hover:opacity-80"
+            className="absolute cursor-pointer transition-all duration-200 ease-out hover:brightness-110"
             style={{
               left: seg.left,
               width: Math.max(seg.width, 2),
               top: BAR_TOP,
               height: BAR_HEIGHT,
-              background: seg.color,
-              opacity: 0.85,
+              borderRadius: 6,
+              background: `linear-gradient(135deg, ${seg.color} 0%, ${seg.color}dd 100%)`,
+              opacity: 0.9,
+              boxShadow: `0 1px 3px ${seg.color}33`,
             }}
             onClick={(e) => {
               e.stopPropagation();
@@ -732,16 +775,20 @@ function GanttRow({
           return (
             <div
               key={ms.id}
-              className="absolute"
+              className="absolute transition-transform duration-200 ease-out hover:scale-125"
               style={{
-                left: msOffset * dayWidth + dayWidth / 2 - 5,
-                top: 12,
+                left: msOffset * dayWidth + dayWidth / 2 - 6,
+                top: 10,
               }}
               title={`${ms.name}\n${formatDate(ms.date)}${ms.description ? `\n${ms.description}` : ""}`}
             >
               <div
-                className="w-2.5 h-2.5 rotate-45"
-                style={{ background: "var(--gold)", filter: "drop-shadow(0 0 4px var(--gold))" }}
+                className="w-3 h-3 rotate-45"
+                style={{
+                  background: "var(--gold)",
+                  boxShadow: "0 0 6px rgba(184, 134, 11, 0.4), 0 0 12px rgba(184, 134, 11, 0.15)",
+                  border: "1px solid var(--gold-light, #D4A853)",
+                }}
               />
             </div>
           );

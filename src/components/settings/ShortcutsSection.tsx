@@ -99,15 +99,10 @@ export default function ShortcutsSection({ onDirtyChange }: { onDirtyChange?: (d
   return (
     <>
     <section className="animate-slide-up">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <h2
-            className="text-lg"
-            style={{ color: "var(--text-primary)" }}
-          >
-            全局快捷键
-          </h2>
-        </div>
+      <div className="flex items-center justify-between mb-5">
+        <h2 className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
+          全局快捷键
+        </h2>
         <div className="flex gap-2">
           <button className="btn btn-outline btn-sm" onClick={handleReset}>
             <RotateCcw size={13} strokeWidth={1.5} />
@@ -125,10 +120,7 @@ export default function ShortcutsSection({ onDirtyChange }: { onDirtyChange?: (d
         </div>
       </div>
 
-      <p
-        className="text-xs mb-4"
-        style={{ color: "var(--text-tertiary)" }}
-      >
+      <p className="text-xs mb-5 leading-relaxed" style={{ color: "var(--text-muted)" }}>
         点击快捷键区域，按下新的组合键来修改。保存后立即生效。
       </p>
 
@@ -136,52 +128,30 @@ export default function ShortcutsSection({ onDirtyChange }: { onDirtyChange?: (d
         {editing.map((sc, index) => (
           <div
             key={sc.action}
-            className="card flex items-center justify-between py-3"
+            className="card flex items-center justify-between py-3.5 px-4"
           >
             <div className="flex-1 min-w-0">
-              <p
-                className="text-sm"
-                style={{ color: "var(--text-primary)" }}
-              >
+              <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
                 {sc.label}
               </p>
-              <p
-                className="text-xs mt-0.5"
-                style={{ color: "var(--text-tertiary)" }}
-              >
+              <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
                 {sc.description}
               </p>
             </div>
-            {/* 品牌 kbd 按钮：bg-surface-alt + border-default + */}
             <button
-              className="px-3 py-1.5 rounded-md text-xs transition-all min-w-[140px] text-center"
+              className="px-3.5 py-1.5 rounded-md text-xs font-mono transition-all min-w-[140px] text-center"
               style={{
-                background:
-                  recordingIndex === index
-                    ? "var(--gold-glow-strong)"
-                    : "var(--bg-surface-alt)",
-                border: `1px solid ${
-                  recordingIndex === index
-                    ? "var(--gold)"
-                    : "var(--border-default)"
-                }`,
-                color:
-                  recordingIndex === index
-                    ? "var(--gold)"
-                    : "var(--text-primary)",
-                boxShadow:
-                  recordingIndex === index
-                    ? "var(--shadow-gold)"
-                    : "none",
+                background: recordingIndex === index ? "var(--gold-glow-strong)" : "var(--bg-surface-alt)",
+                border: `1px solid ${recordingIndex === index ? "var(--gold)" : "var(--border-default)"}`,
+                color: recordingIndex === index ? "var(--gold)" : "var(--text-primary)",
+                boxShadow: recordingIndex === index ? "var(--shadow-gold)" : "none",
                 cursor: "pointer",
               }}
               onClick={() => setRecordingIndex(recordingIndex === index ? null : index)}
               onKeyDown={(e) => handleRecordKey(index, e)}
               tabIndex={0}
             >
-              {recordingIndex === index
-                ? "按下组合键..."
-                : formatShortcut(sc.shortcut)}
+              {recordingIndex === index ? "按下组合键..." : formatShortcut(sc.shortcut)}
             </button>
           </div>
         ))}

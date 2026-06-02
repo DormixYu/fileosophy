@@ -5,8 +5,11 @@ use crate::commands::utils::get_setting;
 pub const EVENT_FILE_SHARED: &str = "file-shared";
 pub const EVENT_NOTIFICATION: &str = "app-notification";
 pub const EVENT_PROJECT_UPDATED: &str = "project-updated";
+#[allow(dead_code)]
 pub const EVENT_SHARE_CONNECTED: &str = "share-connected";
+#[allow(dead_code)]
 pub const EVENT_SHARE_DISCONNECTED: &str = "share-disconnected";
+#[allow(dead_code)]
 pub const EVENT_SHARE_MEMBER_JOINED: &str = "share-member-joined";
 
 /// 发送通知事件到前端

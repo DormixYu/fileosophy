@@ -62,12 +62,10 @@ export default function NotificationSection({ onDirtyChange }: { onDirtyChange?:
   return (
     <>
     <section className="animate-slide-up">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <h2 className="text-lg" style={{ color: "var(--text-primary)" }}>
-            通知设置
-          </h2>
-        </div>
+      <div className="flex items-center justify-between mb-5">
+        <h2 className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
+          通知设置
+        </h2>
         <div className="flex gap-2">
           <button className="btn btn-outline btn-sm" onClick={handleReset}>
             <RotateCcw size={13} strokeWidth={1.5} />
@@ -84,7 +82,7 @@ export default function NotificationSection({ onDirtyChange }: { onDirtyChange?:
           </button>
         </div>
       </div>
-      <p className="text-xs mb-4" style={{ color: "var(--text-tertiary)" }}>
+      <p className="text-xs mb-5 leading-relaxed" style={{ color: "var(--text-muted)" }}>
         控制哪些操作会弹出通知。关闭后通知仍会保存到历史记录中，但不会弹出 Toast 提示。
       </p>
 
@@ -95,35 +93,31 @@ export default function NotificationSection({ onDirtyChange }: { onDirtyChange?:
           return (
             <button
               key={key}
-              className="w-full flex items-center justify-between px-3 py-2.5 rounded-md transition-colors text-left hover-surface-alt-bg"
-              style={{
-                border: "none",
-                cursor: "pointer",
-              }}
+              className="w-full flex items-center justify-between px-4 py-3 rounded-lg transition-colors text-left hover-surface-alt-bg"
+              style={{ border: "none", cursor: "pointer", background: "transparent" }}
               onClick={() => toggle(key)}
             >
               <div className="flex-1 min-w-0">
-                <p className="text-sm" style={{ color: "var(--text-primary)" }}>
+                <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
                   {label}
                 </p>
                 <p className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>
                   {desc}
                 </p>
               </div>
-              {/* 品牌 toggle 开关 */}
               <div
                 className="w-9 h-5 rounded-full relative transition-colors shrink-0 ml-3"
                 style={{
-                  background: isOn ? "var(--gold)" : "var(--border-default)",
+                  background: isOn ? "var(--gold)" : "var(--border-strong)",
                   boxShadow: isOn ? "var(--shadow-gold)" : "none",
                 }}
               >
                 <div
                   className="absolute top-0.5 w-4 h-4 rounded-full transition-transform"
                   style={{
-                    background: "var(--bg-elevated)",
+                    background: "var(--bg-surface)",
                     transform: isOn ? "translateX(18px)" : "translateX(2px)",
-                    boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
                   }}
                 />
               </div>

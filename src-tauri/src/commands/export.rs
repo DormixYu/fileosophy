@@ -49,6 +49,7 @@ fn load_kanban_columns(conn: &rusqlite::Connection, project_id: i64) -> Result<V
                 updated_at: row.get(13).unwrap_or_default(),
                 gantt_task_id: row.get(14).ok(),
                 due_date: row.get(15).ok(),
+                linked_files: Vec::new(),
             });
 
             Ok((col, card))

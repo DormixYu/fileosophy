@@ -31,11 +31,13 @@ export default function InCellStatusDropdown({
   return (
     <span ref={containerRef} className="relative inline-block">
       <span
-        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] cursor-pointer select-none transition-all"
+        className="inline-flex items-center gap-1.5 px-2 py-0.5 text-micro cursor-pointer select-none transition-all"
         style={{
-          background: config ? `${config.color}15` : "var(--bg-surface-alt)",
+          background: config ? `${config.color}12` : "var(--bg-surface-alt)",
           color: config?.color ?? "var(--text-muted)",
-          border: `1px solid ${config ? `${config.color}25` : "var(--border-default)"}`,
+          borderRadius: "var(--radius-full)",
+          fontWeight: 500,
+          border: `1px solid ${config ? `${config.color}20` : "var(--border-default)"}`,
         }}
         onClick={(e) => {
           e.stopPropagation();
@@ -44,29 +46,31 @@ export default function InCellStatusDropdown({
         title="点击更改状态"
       >
         <span
-          className="w-2 h-2 rounded-full inline-block shrink-0"
+          className="w-1.5 h-1.5 rounded-full inline-block shrink-0"
           style={{ background: config?.color ?? "var(--text-muted)" }}
         />
         {config?.name ?? "—"}
       </span>
       {open && (
         <div
-          className="absolute z-50 top-full left-0 mt-1 min-w-[130px] py-1 rounded-lg animate-scale-in"
+          className="absolute z-50 top-full left-0 mt-1.5 min-w-[140px] py-1 animate-scale-in"
           style={{
             background: "var(--bg-elevated)",
             border: "1px solid var(--border-default)",
-            boxShadow: "var(--shadow-gold)",
+            borderRadius: "var(--radius-md)",
+            boxShadow: "var(--shadow-lg)",
           }}
         >
           {statuses.map((s) => (
             <button
               key={s.id}
-              className="w-full text-left px-3 py-1.5 text-xs transition-colors flex items-center gap-2 hover-gold-bg"
+              className="w-full text-left px-3 py-1.5 text-xs transition-colors flex items-center gap-2 hover-surface-alt-bg"
               style={{
                 color: s.id === project.status ? s.color : "var(--text-secondary)",
-                background: s.id === project.status ? `${s.color}15` : "transparent",
+                background: s.id === project.status ? `${s.color}10` : "transparent",
                 cursor: "pointer",
                 border: "none",
+                fontWeight: s.id === project.status ? 500 : 400,
               }}
               onClick={(e) => {
                 e.stopPropagation();

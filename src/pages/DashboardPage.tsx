@@ -1,408 +1,425 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import {
-  FolderKanban, TrendingUp, Clock, CheckCircle2, Pause,
-  PlusCircle, RefreshCw, AlertTriangle, CalendarX, Tag, Settings2,
+  Search, PlayCircle, ClipboardList, PauseCircle,
+  CheckCircle2, FolderOpen, Archive, BookMarked, ListTodo,
 } from "lucide-react";
-import { systemApi } from "@/lib/tauri-api";
 import { useProjectStore } from "@/stores/useProjectStore";
-import { useUserStore } from "@/stores/useUserStore";
-import { useSettingsStore } from "@/stores/useSettingsStore";
-import { getInitials, formatDate } from "@/lib/formatUtils";
-import Spinner from "@/components/common/Spinner";
-import EmptyState from "@/components/common/EmptyState";
-import type { Project, ProjectTypeConfig } from "@/types";
+import { kanbanApi } from "@/lib/tauri-api";
+import type { KanbanCard } from "@/types";
 
-// ── 卡片配置 ──────────────────────────────────────────────────
+// ── 状态卡片配置 ──────────────────────────────────────────────
 
-const STATIC_CARDS = [
-  { id: "total", label: "项目总数" },
-  { id: "active", label: "活跃项目" },
-  { id: "completed_this_year", label: "本年已完成" },
-  { id: "on_hold", label: "已暂停" },
-  { id: "created_this_month", label: "本月新增" },
-  { id: "updated_recently", label: "近7日更新" },
-  { id: "overdue", label: "逾期项目" },
-  { id: "due_soon", label: "即将到期" },
-  { id: "no_end_date", label: "无截止日期" },
-];
-
-const CARD_GROUPS = [
-  { label: "基础统计", ids: ["total", "active", "on_hold"] },
-  { label: "时间统计", ids: ["completed_this_year", "created_this_month", "updated_recently", "overdue", "due_soon", "no_end_date"] },
-];
-
-const ICON_MAP: Record<string, React.ReactNode> = {
-  total: <FolderKanban size={18} strokeWidth={1.5} />,
-  active: <TrendingUp size={18} strokeWidth={1.5} />,
-  completed_this_year: <CheckCircle2 size={18} strokeWidth={1.5} />,
-  on_hold: <Pause size={18} strokeWidth={1.5} />,
-  created_this_month: <PlusCircle size={18} strokeWidth={1.5} />,
-  updated_recently: <RefreshCw size={18} strokeWidth={1.5} />,
-  overdue: <AlertTriangle size={18} strokeWidth={1.5} />,
-  due_soon: <Clock size={18} strokeWidth={1.5} />,
-  no_end_date: <CalendarX size={18} strokeWidth={1.5} />,
-};
-
-const DEFAULT_DASHBOARD_CARDS = ["total", "active", "completed_this_year"];
-const DASHBOARD_CARDS_KEY = "dashboard_cards";
-const MAX_CARDS = 4;
-
-function computeCardValue(id: string, projects: Project[]): string {
-  const now = new Date();
-  const today = now.toISOString().slice(0, 10);
-  const thisYear = String(now.getFullYear());
-  const thisMonth = today.slice(0, 7);
-  const weekAgo = new Date(now.getTime() - 7 * 86400000).toISOString().slice(0, 10);
-  const nextWeek = new Date(now.getTime() + 7 * 86400000).toISOString().slice(0, 10);
-  const isActive = (p: Project) => p.status !== "completed" && p.status !== "cancelled";
-
-  if (id.startsWith("type_")) {
-    const typeId = id.slice(5);
-    return String(projects.filter(p => p.project_type === typeId).length);
-  }
-  switch (id) {
-    case "total": return String(projects.length);
-    case "active": return String(projects.filter(isActive).length);
-    case "completed_this_year": return String(projects.filter(p => p.status === "completed" && ((p.end_date && p.end_date.slice(0, 4) === thisYear) || (p.updated_at && p.updated_at.slice(0, 4) === thisYear))).length);
-    case "on_hold": return String(projects.filter(p => p.status === "on_hold").length);
-    case "created_this_month": return String(projects.filter(p => p.created_at && p.created_at.slice(0, 7) === thisMonth).length);
-    case "updated_recently": return String(projects.filter(p => p.updated_at && p.updated_at.slice(0, 10) >= weekAgo).length);
-    case "overdue": return String(projects.filter(p => isActive(p) && p.end_date && p.end_date.slice(0, 10) < today).length);
-    case "due_soon": return String(projects.filter(p => isActive(p) && p.end_date && p.end_date.slice(0, 10) >= today && p.end_date.slice(0, 10) <= nextWeek).length);
-    case "no_end_date": return String(projects.filter(p => isActive(p) && !p.end_date).length);
-    default: return "0";
-  }
+interface StatusCardConfig {
+  key: string;
+  label: string;
+  icon: React.ReactNode;
+  filterUrl: string;
+  color: string;
 }
 
-function getCardLabel(id: string, types: ProjectTypeConfig[]): string {
-  if (id.startsWith("type_")) {
-    const t = types.find(t => t.id === id.slice(5));
-    return t ? `${t.name}项目` : id;
-  }
-  return STATIC_CARDS.find(c => c.id === id)?.label || id;
-}
+const STATUS_CARDS: StatusCardConfig[] = [
+  { key: "in_progress", label: "进行中", icon: <PlayCircle size={22} strokeWidth={1.5} />, filterUrl: "/projects?status=in_progress", color: "var(--status-in-progress)" },
+  { key: "planning",    label: "规划中", icon: <ClipboardList size={22} strokeWidth={1.5} />, filterUrl: "/projects?status=planning", color: "var(--gold)" },
+  { key: "on_hold",     label: "已暂停", icon: <PauseCircle size={22} strokeWidth={1.5} />, filterUrl: "/projects?status=on_hold", color: "var(--color-warning)" },
+  { key: "completed_this_month", label: "本月完成", icon: <CheckCircle2 size={22} strokeWidth={1.5} />, filterUrl: "/projects?status=completed&month=current", color: "var(--color-success)" },
+  { key: "total",       label: "全部项目", icon: <FolderOpen size={22} strokeWidth={1.5} />, filterUrl: "/projects", color: "var(--text-secondary)" },
+  { key: "archived",    label: "已归档", icon: <Archive size={22} strokeWidth={1.5} />, filterUrl: "/projects?status=cancelled", color: "var(--text-muted)" },
+];
 
-function getCardIcon(id: string): React.ReactNode {
-  if (id.startsWith("type_")) return <Tag size={18} strokeWidth={1.5} />;
-  return ICON_MAP[id] || <FolderKanban size={18} strokeWidth={1.5} />;
+// ── 动画 keyframes ────────────────────────────────────────────
+
+const ANIM_KEYFRAMES = `
+@keyframes dashFadeSlideUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes dashSearchFadeIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+`;
+
+function AnimStyles() {
+  return <style>{ANIM_KEYFRAMES}</style>;
 }
 
 // ── 主组件 ──────────────────────────────────────────────────
 
 export default function DashboardPage() {
-  const { projects, fetchProjects, loading } = useProjectStore();
-  const { user, fetchUser } = useUserStore();
-  const { settings, parsedTypes, saveSettings } = useSettingsStore();
-  const navigate = useNavigate();
-  const [showCardSelector, setShowCardSelector] = useState(false);
+  const { projects, fetchProjects } = useProjectStore();
 
   useEffect(() => {
     if (projects.length === 0) fetchProjects();
-    fetchUser();
-  }, [projects.length, fetchProjects, fetchUser]);
+  }, [projects.length, fetchProjects]);
 
-  const activeCount = useMemo(
-    () => projects.filter(p => p.status !== "completed" && p.status !== "cancelled").length,
-    [projects]
-  );
+  // ── 卡片计数 ──
 
-  const activeProjects = useMemo(
-    () =>
-      projects
-        .filter((p) => p.status !== "completed" && p.status !== "cancelled")
-        .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
-        .slice(0, 6),
-    [projects]
-  );
+  const counts = useMemo(() => {
+    const now = new Date();
+    const thisMonth = now.toISOString().slice(0, 7);
+    return {
+      in_progress: projects.filter(p => p.status === "in_progress").length,
+      planning:    projects.filter(p => p.status === "planning").length,
+      on_hold:     projects.filter(p => p.status === "on_hold").length,
+      completed_this_month: projects.filter(p =>
+        p.status === "completed" && p.updated_at && p.updated_at.slice(0, 7) === thisMonth
+      ).length,
+      total:       projects.length,
+      archived:    projects.filter(p => p.status === "cancelled").length,
+    };
+  }, [projects]);
 
-  // 选中卡片
-  const selectedCards = useMemo(() => {
+  // ── 待办事项聚合 ──
+
+  const [todoCards, setTodoCards] = useState<(KanbanCard & { projectName: string })[]>([]);
+  const [todoLoading, setTodoLoading] = useState(false);
+
+  const fetchTodos = useCallback(async () => {
+    const activeProjects = projects.filter(p => p.status !== "completed" && p.status !== "cancelled");
+    if (activeProjects.length === 0) return;
+    setTodoLoading(true);
     try {
-      const raw = settings[DASHBOARD_CARDS_KEY];
-      if (raw) {
-        const arr = JSON.parse(raw);
-        if (Array.isArray(arr) && arr.length > 0) return arr.slice(0, MAX_CARDS) as string[];
+      const results = await Promise.allSettled(
+        activeProjects.slice(0, 10).map(p =>
+          kanbanApi.getBoard(p.id).then(board => ({
+            projectName: p.name,
+            cards: board.columns
+              .filter(c => c.column_type === "todo_pending")
+              .flatMap(c => c.cards ?? []),
+          }))
+        )
+      );
+      const all: (KanbanCard & { projectName: string })[] = [];
+      for (const r of results) {
+        if (r.status === "fulfilled") {
+          for (const card of r.value.cards) {
+            all.push({ ...card, projectName: r.value.projectName });
+          }
+        }
       }
-    } catch { /* ignore */ }
-    return DEFAULT_DASHBOARD_CARDS;
-  }, [settings]);
-
-  // 卡片数值
-  const cardValues = useMemo(() => {
-    const map: Record<string, string> = {};
-    for (const id of selectedCards) {
-      map[id] = computeCardValue(id, projects);
+      setTodoCards(all.slice(0, 10));
+    } catch {
+      // ignore
+    } finally {
+      setTodoLoading(false);
     }
-    return map;
-  }, [projects, selectedCards]);
+  }, [projects]);
 
-  const toggleCard = (id: string) => {
-    const next = selectedCards.includes(id)
-      ? selectedCards.filter(v => v !== id)
-      : [...selectedCards, id].slice(0, MAX_CARDS);
-    if (next.length === 0) return; // 不允许全部取消
-    saveSettings({ [DASHBOARD_CARDS_KEY]: JSON.stringify(next) });
+  useEffect(() => {
+    if (projects.length > 0) fetchTodos();
+  }, [projects, fetchTodos]);
+
+  // ── 搜索跳转 ──
+
+  const handleSearchFocus = () => {
+    window.dispatchEvent(new CustomEvent("global-shortcut", { detail: "global_search" }));
   };
 
   return (
-    <div className="px-10 pt-10 pb-12 animate-fade-up">
-      {/* 品牌欢迎区 */}
-      <div className="mb-10">
-        <div className="flex items-center gap-5 mb-4">
-          {user?.avatar_path ? (
-            <img
-              src={systemApi.convertFileSrc(user.avatar_path)}
-              alt="头像"
-              className="w-11 h-11 rounded-full object-cover shrink-0"
-              style={{ border: "2px solid var(--gold)" }}
-            />
-          ) : (
-            <div
-              className="w-11 h-11 rounded-full flex items-center justify-center text-sm font-medium shrink-0"
-              style={{ background: "var(--gold-glow-strong)", color: "var(--gold)", border: "2px solid var(--gold)" }}
-            >
-              {user?.name ? getInitials(user.name) : "?"}
-            </div>
-          )}
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-title mb-0" style={{ color: "var(--text-primary)" }}>
-                {user?.name ? `欢迎回来，${user.name}` : "概览"}
-              </h1>
-            </div>
-          </div>
+    <div style={{ padding: "40px 48px 48px", minHeight: "100%" }}>
+      <AnimStyles />
+
+      {/* ── 搜索栏 ── */}
+      <div
+        style={{
+          animation: "dashSearchFadeIn 0.5s var(--ease-liquid) both",
+          marginBottom: 40,
+          display: "flex",
+          justifyContent: "center",
+        }}
+      >
+        <div
+          style={{
+            position: "relative",
+            width: "100%",
+            maxWidth: 520,
+          }}
+        >
+          <Search
+            size={16}
+            strokeWidth={1.5}
+            style={{
+              position: "absolute",
+              left: 16,
+              top: "50%",
+              transform: "translateY(-50%)",
+              color: "var(--text-muted)",
+              pointerEvents: "none",
+            }}
+          />
+          <input
+            type="text"
+            readOnly
+            onFocus={handleSearchFocus}
+            onClick={handleSearchFocus}
+            placeholder="搜索项目、卡片、任务、文件… (⌘⇧F)"
+            style={{
+              width: "100%",
+              height: 44,
+              padding: "0 16px 0 42px",
+              fontSize: 14,
+              fontFamily: "inherit",
+              color: "var(--text-tertiary)",
+              background: "var(--bg-surface)",
+              border: "1px solid var(--border-default)",
+              borderRadius: "var(--radius-lg)",
+              outline: "none",
+              cursor: "pointer",
+              transition: "border-color var(--duration-base) var(--ease-smooth), box-shadow var(--duration-base) var(--ease-smooth)",
+              boxShadow: "var(--shadow-sm)",
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.borderColor = "var(--gold)";
+              e.currentTarget.style.boxShadow = "var(--shadow-gold)";
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.borderColor = "var(--border-default)";
+              e.currentTarget.style.boxShadow = "var(--shadow-sm)";
+            }}
+          />
         </div>
-        <p className="text-callout" style={{ color: "var(--text-tertiary)" }}>
-          这里是你的项目全貌
-        </p>
       </div>
 
-      {/* 统计卡片 */}
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg" style={{ color: "var(--text-muted)" }}>项目概览</h2>
-        <div className="relative">
-          <button
-            className="p-1 rounded-md transition-colors hover-gold-bg"
-            style={{ color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer" }}
-            onClick={() => setShowCardSelector(!showCardSelector)}
-            title="自定义卡片"
-          >
-            <Settings2 size={14} strokeWidth={1.5} />
-          </button>
-          {showCardSelector && (
-            <>
-              <div className="fixed inset-0 z-40" onClick={() => setShowCardSelector(false)} />
-              <CardSelector
-                selectedCards={selectedCards}
-                parsedTypes={parsedTypes}
-                maxCards={MAX_CARDS}
-                onToggle={toggleCard}
-              />
-            </>
-          )}
-        </div>
-      </div>
-      <div className="grid gap-5 mb-10" style={{ gridTemplateColumns: `repeat(${Math.min(selectedCards.length, 4)}, 1fr)` }}>
-        {selectedCards.map(id => (
-          <StatCard
-            key={id}
-            icon={getCardIcon(id)}
-            label={getCardLabel(id, parsedTypes)}
-            value={cardValues[id] || "0"}
+      {/* ── 状态卡片网格 (2x3) ── */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(3, 1fr)",
+          gap: 20,
+          marginBottom: 48,
+        }}
+      >
+        {STATUS_CARDS.map((card, i) => (
+          <StatusCard
+            key={card.key}
+            config={card}
+            count={counts[card.key as keyof typeof counts] ?? 0}
+            delay={i * 0.08}
           />
         ))}
       </div>
 
-      {/* 活跃项目区 */}
-      <div className="flex items-center justify-between mb-5">
-        <div className="flex items-center gap-3">
-          <h2 className="text-lg" style={{ color: "var(--text-primary)" }}>
-            活跃项目
-          </h2>
-          <span className="text-footnote" style={{ color: "var(--text-muted)" }}>
-            {activeCount > 0 ? `${activeCount} 个` : ""}
-          </span>
+      {/* ── 底部双栏 ── */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 24,
+          alignItems: "start",
+        }}
+      >
+        {/* 左栏：标记文件 */}
+        <div
+          className="card"
+          style={{
+            animation: "dashFadeSlideUp 0.5s var(--ease-liquid) 0.5s both",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+            <BookMarked size={16} strokeWidth={1.5} style={{ color: "var(--gold)" }} />
+            <h3 style={{
+              margin: 0,
+              fontSize: 15,
+              fontWeight: 500,
+              color: "var(--text-primary)",
+              fontFamily: "var(--font-display)",
+              letterSpacing: "0.01em",
+            }}>
+              标记文件
+            </h3>
+          </div>
+          <div style={{
+            textAlign: "center",
+            padding: "32px 0",
+            color: "var(--text-muted)",
+            fontSize: 13,
+          }}>
+            <BookMarked size={28} strokeWidth={1.2} style={{ marginBottom: 8, opacity: 0.4 }} />
+            <p style={{ margin: 0 }}>暂无标记文件</p>
+          </div>
         </div>
-        <Link to="/projects" className="btn btn-ghost btn-sm hover-gold-text" style={{ color: "var(--gold)" }}>
-          查看全部
-        </Link>
-      </div>
 
-      {loading ? (
-        <div className="text-center py-16 animate-fade-up">
-          <Spinner />
-          <p className="text-footnote mt-4" style={{ color: "var(--text-muted)" }}>
-            正在加载...
-          </p>
+        {/* 右栏：待办事项 */}
+        <div
+          className="card"
+          style={{
+            animation: "dashFadeSlideUp 0.5s var(--ease-liquid) 0.6s both",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+            <ListTodo size={16} strokeWidth={1.5} style={{ color: "var(--gold)" }} />
+            <h3 style={{
+              margin: 0,
+              fontSize: 15,
+              fontWeight: 500,
+              color: "var(--text-primary)",
+              fontFamily: "var(--font-display)",
+              letterSpacing: "0.01em",
+            }}>
+              待办事项
+            </h3>
+          </div>
+          {todoLoading ? (
+            <div style={{ textAlign: "center", padding: "24px 0", color: "var(--text-muted)", fontSize: 13 }}>
+              加载中…
+            </div>
+          ) : todoCards.length === 0 ? (
+            <div style={{
+              textAlign: "center",
+              padding: "32px 0",
+              color: "var(--text-muted)",
+              fontSize: 13,
+            }}>
+              <ListTodo size={28} strokeWidth={1.2} style={{ marginBottom: 8, opacity: 0.4 }} />
+              <p style={{ margin: 0 }}>暂无待办事项</p>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+              {todoCards.map((card, i) => (
+                <TodoItem key={card.id} card={card} delay={0.65 + i * 0.05} />
+              ))}
+            </div>
+          )}
         </div>
-      ) : activeProjects.length === 0 ? (
-        <div className="animate-fade-up">
-          <EmptyState
-            icon={<FolderKanban size={24} strokeWidth={1.5} />}
-            title="暂无活跃项目"
-            description="创建第一个吧"
-            action={{ label: "新建项目", onClick: () => navigate("/projects") }}
-          />
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-5 animate-fade-up">
-          {activeProjects.map((project) => (
-            <Link
-              key={project.id}
-              to={`/project/${project.id}`}
-              className="card card-interactive hover-gold-border group"
-            >
-              <div className="flex items-start justify-between mb-2">
-                <h3 className="text-callout font-medium leading-snug" style={{ color: "var(--text-primary)" }}>
-                  {project.name}
-                </h3>
-                {project.status && (
-                  <span className="badge badge-primary ml-2 shrink-0">
-                    {project.status === "in_progress" ? "进行中" :
-                     project.status === "planning" ? "规划中" :
-                     project.status === "completed" ? "已完成" :
-                     project.status === "on_hold" ? "已暂停" :
-                     project.status === "cancelled" ? "已取消" : project.status}
-                  </span>
-                )}
-              </div>
-              <p className="text-footnote line-clamp-2 mb-4" style={{ color: "var(--text-tertiary)" }}>
-                {project.description || "暂无描述"}
-              </p>
-              <div className="text-caption" style={{ color: "var(--text-dim)" }}>
-                更新于 {formatDate(project.updated_at)}
-              </div>
-            </Link>
-          ))}
-        </div>
-      )}
+      </div>
     </div>
   );
 }
 
-// ── 卡片选择器 ──────────────────────────────────────────────────
+// ── StatusCard 子组件 ──────────────────────────────────────────
 
-function CardSelector({
-  selectedCards,
-  parsedTypes,
-  maxCards,
-  onToggle,
+function StatusCard({
+  config,
+  count,
+  delay = 0,
 }: {
-  selectedCards: string[];
-  parsedTypes: ProjectTypeConfig[];
-  maxCards: number;
-  onToggle: (id: string) => void;
+  config: StatusCardConfig;
+  count: number;
+  delay?: number;
 }) {
-  const isFull = selectedCards.length >= maxCards;
+  const [hovered, setHovered] = useState(false);
+  const navigate = useNavigate();
 
   return (
     <div
-      className="absolute right-0 top-full mt-1 z-50 rounded-lg p-3 min-w-[200px] animate-fade-in"
+      onClick={() => navigate(config.filterUrl)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
-        background: "var(--bg-elevated)",
-        border: "1px solid var(--border-default)",
-        boxShadow: "var(--shadow-gold-lg)",
+        background: "var(--bg-surface)",
+        border: `1px solid ${hovered ? config.color : "var(--border-default)"}`,
+        borderRadius: "var(--radius-md)",
+        padding: "24px",
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        gap: 18,
+        transition: `
+          transform var(--duration-base) var(--ease-liquid),
+          box-shadow var(--duration-base) var(--ease-liquid),
+          border-color var(--duration-base) var(--ease-smooth)
+        `,
+        transform: hovered ? "translateY(-3px)" : "translateY(0)",
+        boxShadow: hovered ? "var(--shadow-lg)" : "var(--shadow-sm)",
+        animation: `dashFadeSlideUp 0.5s var(--ease-liquid) ${delay}s both`,
       }}
     >
-      <div className="text-[10px] mb-2" style={{ color: "var(--text-muted)" }}>
-        选择最多 {maxCards} 个卡片（已选 {selectedCards.length}/{maxCards}）
+      {/* 图标 */}
+      <div
+        style={{
+          width: 44,
+          height: 44,
+          borderRadius: "var(--radius-sm)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+          background: `color-mix(in srgb, ${config.color} 10%, transparent)`,
+          color: config.color,
+          border: `1px solid color-mix(in srgb, ${config.color} 30%, transparent)`,
+          transition: "transform var(--duration-base) var(--ease-liquid)",
+          transform: hovered ? "scale(1.08)" : "scale(1)",
+        }}
+      >
+        {config.icon}
       </div>
 
-      {CARD_GROUPS.map(group => (
-        <div key={group.label} className="mb-2">
-          <div className="text-[10px] font-medium mb-1" style={{ color: "var(--text-muted)" }}>
-            {group.label}
-          </div>
-          {group.ids.map(id => (
-            <label
-              key={id}
-              className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-xs cursor-pointer transition-colors ${!selectedCards.includes(id) && isFull ? "opacity-40" : "hover-gold-bg"}`}
-              style={{ color: selectedCards.includes(id) ? "var(--gold)" : "var(--text-secondary)" }}
-            >
-              <input
-                type="checkbox"
-                checked={selectedCards.includes(id)}
-                disabled={!selectedCards.includes(id) && isFull}
-                onChange={() => onToggle(id)}
-                className="w-3 h-3 accent-[var(--gold)]"
-              />
-              {getCardIcon(id)}
-              {getCardLabel(id, parsedTypes)}
-            </label>
-          ))}
+      {/* 文字 */}
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{
+          fontSize: 12,
+          letterSpacing: "0.05em",
+          color: "var(--text-muted)",
+          marginBottom: 4,
+        }}>
+          {config.label}
         </div>
-      ))}
-
-      {/* 分类统计 */}
-      {parsedTypes.length > 0 && (
-        <div className="mb-2">
-          <div className="text-[10px] font-medium mb-1" style={{ color: "var(--text-muted)" }}>
-            分类统计
-          </div>
-          {parsedTypes.map(t => {
-            const id = `type_${t.id}`;
-            return (
-              <label
-                key={id}
-                className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-xs cursor-pointer transition-colors ${!selectedCards.includes(id) && isFull ? "opacity-40" : "hover-gold-bg"}`}
-                style={{ color: selectedCards.includes(id) ? "var(--gold)" : "var(--text-secondary)" }}
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedCards.includes(id)}
-                  disabled={!selectedCards.includes(id) && isFull}
-                  onChange={() => onToggle(id)}
-                  className="w-3 h-3 accent-[var(--gold)]"
-                />
-                <Tag size={14} strokeWidth={1.5} />
-                {t.name}项目
-              </label>
-            );
-          })}
+        <div style={{
+          fontSize: 26,
+          fontWeight: 500,
+          color: "var(--text-primary)",
+          lineHeight: 1.1,
+          fontFamily: "var(--font-display)",
+        }}>
+          {count}
         </div>
-      )}
+      </div>
     </div>
   );
 }
 
-// ── StatCard ──────────────────────────────────────────────────
+// ── TodoItem 子组件 ──────────────────────────────────────────
 
-function StatCard({
-  icon,
-  label,
-  value,
+function TodoItem({
+  card,
+  delay = 0,
 }: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
+  card: KanbanCard & { projectName: string };
+  delay?: number;
 }) {
+  const [hovered, setHovered] = useState(false);
+
   return (
-    <div className="card">
-      <div className="flex items-center gap-4">
-        <div
-          className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
-          style={{
-            background: "var(--gold-glow-strong)",
-            color: "var(--gold)",
-            border: "1px solid var(--gold)",
-          }}
-        >
-          {icon}
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        padding: "10px 8px",
+        borderRadius: "var(--radius-sm)",
+        transition: "background var(--duration-fast) var(--ease-smooth)",
+        background: hovered ? "var(--gold-glow)" : "transparent",
+        animation: `dashFadeSlideUp 0.35s var(--ease-liquid) ${delay}s both`,
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+      }}
+    >
+      <div
+        style={{
+          width: 6,
+          height: 6,
+          borderRadius: "var(--radius-full)",
+          background: "var(--gold)",
+          flexShrink: 0,
+        }}
+      />
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{
+          fontSize: 13,
+          color: "var(--text-primary)",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap" as const,
+        }}>
+          {card.title}
         </div>
-        <div className="min-w-0">
-          <div
-            className="text-footnote uppercase tracking-[0.15em] mb-1"
-            style={{ color: "var(--text-muted)" }}
-          >
-            {label}
-          </div>
-          <div
-            className="text-xl font-medium truncate"
-            style={{ color: "var(--text-primary)" }}
-          >
-            {value}
-          </div>
+        <div style={{
+          fontSize: 11,
+          color: "var(--text-muted)",
+          marginTop: 1,
+        }}>
+          {card.projectName}
         </div>
       </div>
     </div>

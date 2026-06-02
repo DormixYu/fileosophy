@@ -44,7 +44,7 @@ export default function ProjectConfigSection({ onDirtyChange }: { onDirtyChange?
   const [newTypeName, setNewTypeName] = useState("");
   const [newTypePrefix, setNewTypePrefix] = useState("");
   const [newStatusName, setNewStatusName] = useState("");
-  const [newStatusColor, setNewStatusColor] = useState("#6366f1");
+  const [newStatusColor, setNewStatusColor] = useState("var(--color-info)");
 
   useEffect(() => {
     onDirtyChange?.(dirty);
@@ -126,7 +126,7 @@ export default function ProjectConfigSection({ onDirtyChange }: { onDirtyChange?
       { id: id as ProjectStatusConfig["id"], name: newStatusName.trim(), color: newStatusColor, sort_order: prev.length },
     ]);
     setNewStatusName("");
-    setNewStatusColor("#6366f1");
+    setNewStatusColor("var(--color-info)");
     setDirty(true);
   };
 
@@ -147,13 +147,11 @@ export default function ProjectConfigSection({ onDirtyChange }: { onDirtyChange?
 
   return (
     <>
-    <section className="animate-slide-up space-y-6">
+    <section className="animate-slide-up space-y-8">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <h2 className="text-lg" style={{ color: "var(--text-primary)" }}>
-            项目配置
-          </h2>
-        </div>
+        <h2 className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
+          项目配置
+        </h2>
         <div className="flex gap-2">
           <button className="btn btn-outline btn-sm" onClick={handleReset}>
             <RotateCcw size={13} strokeWidth={1.5} />
@@ -171,12 +169,10 @@ export default function ProjectConfigSection({ onDirtyChange }: { onDirtyChange?
         </div>
       </div>
       <div>
-        <div className="flex items-center gap-3 mb-2">
-          <h3 className="text-base" style={{ color: "var(--text-primary)" }}>
-            编号模板
-          </h3>
-        </div>
-        <p className="text-xs mb-3" style={{ color: "var(--text-tertiary)" }}>
+        <h3 className="text-sm font-semibold mb-2" style={{ color: "var(--text-primary)" }}>
+          编号模板
+        </h3>
+        <p className="text-xs mb-3 leading-relaxed" style={{ color: "var(--text-muted)" }}>
           支持变量：{"{prefix}"}（项目分类前缀）、{"{date}"}（日期）、{"{sequence}"}（当日序号）
         </p>
         <div className="flex items-center gap-3 mb-3">
@@ -211,8 +207,8 @@ export default function ProjectConfigSection({ onDirtyChange }: { onDirtyChange?
         </div>
 
         <div className="mt-3">
-          <label className="text-[11px] mb-1 block" style={{ color: "var(--text-muted)" }}>项目根目录</label>
-          <p className="text-xs mb-2" style={{ color: "var(--text-tertiary)" }}>
+          <label className="text-[11px] mb-1 block font-medium" style={{ color: "var(--text-secondary)" }}>项目根目录</label>
+          <p className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>
             新建项目时在此目录下自动创建项目文件夹。留空则不自动创建。
           </p>
           <div className="flex items-center gap-2">
@@ -239,14 +235,12 @@ export default function ProjectConfigSection({ onDirtyChange }: { onDirtyChange?
       </div>
 
       <div>
-        <div className="flex items-center gap-3 mb-3">
-          <h3 className="text-base" style={{ color: "var(--text-primary)" }}>
-            项目分类
-          </h3>
-        </div>
+        <h3 className="text-sm font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
+          项目分类
+        </h3>
         <div className="space-y-2 mb-3">
           {types.map((t) => (
-            <div key={t.id} className="card flex items-center gap-3 py-2 px-3 hover-gold-bg transition-colors">
+            <div key={t.id} className="card flex items-center gap-3 py-2.5 px-3.5 hover-gold-bg transition-colors">
               <span className="flex-1 text-sm" style={{ color: "var(--text-primary)" }}>
                 {t.name}
               </span>
@@ -303,14 +297,12 @@ export default function ProjectConfigSection({ onDirtyChange }: { onDirtyChange?
       </div>
 
       <div>
-        <div className="flex items-center gap-3 mb-3">
-          <h3 className="text-base" style={{ color: "var(--text-primary)" }}>
-            项目状态
-          </h3>
-        </div>
+        <h3 className="text-sm font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
+          项目状态
+        </h3>
         <div className="space-y-2 mb-3">
           {statuses.map((s) => (
-            <div key={s.id} className="card flex items-center gap-3 py-2 px-3 hover-gold-bg transition-colors">
+            <div key={s.id} className="card flex items-center gap-3 py-2.5 px-3.5 hover-gold-bg transition-colors">
               <input
                 type="color"
                 value={s.color}
@@ -364,16 +356,14 @@ export default function ProjectConfigSection({ onDirtyChange }: { onDirtyChange?
       </div>
 
       <div>
-        <div className="flex items-center gap-3 mb-3">
-          <h3 className="text-base" style={{ color: "var(--text-primary)" }}>
-            项目列表显示列
-          </h3>
-        </div>
+        <h3 className="text-sm font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
+          项目列表显示列
+        </h3>
         <div className="grid grid-cols-2 gap-2">
           {columns.map((col) => (
             <label
               key={col.key}
-              className="flex items-center gap-2 py-1.5 px-3 rounded-md text-xs cursor-pointer transition-colors hover-surface-alt-bg"
+              className="flex items-center gap-2 py-2 px-3 rounded-lg text-xs cursor-pointer transition-colors hover-surface-alt-bg"
               style={{
                 color: col.fixed ? "var(--text-muted)" : "var(--text-primary)",
                 opacity: col.fixed ? 0.6 : 1,

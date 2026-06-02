@@ -34,7 +34,7 @@ export default function StatusHistoryModal({
   const [saving, setSaving] = useState(false);
 
   const getStatusColor = (statusId: string) =>
-    statuses.find((s) => s.id === statusId)?.color || "#94a3b8";
+    statuses.find((s) => s.id === statusId)?.color || "var(--text-secondary)";
 
   const addItem = () => {
     const today = getToday();

@@ -21,9 +21,9 @@ interface EditableRow extends ScannedFolder {
 }
 
 const CONF_COLORS: Record<string, { bg: string; border: string; dot: string }> = {
-  high: { bg: "var(--color-success-light, #e8f5e9)", border: "var(--color-success, #4caf50)", dot: "#4caf50" },
-  medium: { bg: "var(--color-warning-light, #fff8e1)", border: "var(--color-warning, #ff9800)", dot: "#ff9800" },
-  low: { bg: "var(--color-danger-light, #ffebee)", border: "var(--color-danger, #f44336)", dot: "#f44336" },
+  high: { bg: "var(--color-success-light)", border: "var(--color-success)", dot: "var(--color-success)" },
+  medium: { bg: "var(--color-warning-light)", border: "var(--color-warning)", dot: "var(--color-warning)" },
+  low: { bg: "var(--color-danger-light)", border: "var(--color-danger)", dot: "var(--color-danger)" },
 };
 
 export default function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void }) {

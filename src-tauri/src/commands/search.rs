@@ -118,5 +118,32 @@ pub fn global_search(db: State<'_, DbConn>, query: String) -> Result<Vec<SearchR
         }
     }
 
+    // 搜索文件标记/备注
+    {
+        let mut stmt = conn
+            .prepare(
+                "SELECT b.id, b.file_name, COALESCE(b.note, ''), b.project_id, p.name \
+                 FROM file_bookmarks b \
+                 JOIN projects p ON b.project_id = p.id \
+                 WHERE b.file_name LIKE ?1 OR b.note LIKE ?1",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([&pattern], |row| {
+                Ok(SearchResult {
+                    result_type: "bookmark".to_string(),
+                    id: row.get(0)?,
+                    title: row.get(1)?,
+                    detail: row.get(2)?,
+                    project_id: row.get(3)?,
+                    project_name: row.get(4)?,
+                })
+            })
+            .map_err(|e| e.to_string())?;
+        for row in rows {
+            results.push(row.map_err(|e| e.to_string())?);
+        }
+    }
+
     Ok(results)
 }

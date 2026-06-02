@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Pencil, Clock, Calendar, FolderOpen } from "lucide-react";
+import { ArrowLeft, Pencil, Clock, Calendar, FolderOpen, BookMarked } from "lucide-react";
 import { useProjectStore } from "@/stores/useProjectStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 import { projectApi } from "@/lib/tauri-api";
@@ -10,7 +10,11 @@ import FilePanel from "@/components/files/FilePanel";
 import Spinner from "@/components/common/Spinner";
 import KanbanBoard from "@/components/kanban/KanbanBoard";
 import GanttChart from "@/components/gantt/GanttChart";
+import WorkSessionPanel from "@/components/sessions/WorkSessionPanel";
 import { formatDate, formatDateTime } from "@/lib/formatUtils";
+import type { WorkSession } from "@/types";
+
+type TabKey = "files" | "kanban" | "gantt" | "sessions";
 
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -22,23 +26,37 @@ export default function ProjectDetailPage() {
   const { parsedStatuses, parsedTypes } = useSettingsStore();
 
   const [showEdit, setShowEdit] = useState(false);
+  const [activeKanbanCardId, setActiveKanbanCardId] = useState<number | null>(null);
+  const [openFiles, setOpenFiles] = useState<string[]>([]);
+
   const tabParam = searchParams.get("tab");
-  const initialTab = tabParam === "kanban" || tabParam === "gantt" ? tabParam : "detail";
-  const [activeView, setActiveView] = useState<"detail" | "kanban" | "gantt">(initialTab);
+  const resolveTab = (t: string | null): TabKey => {
+    if (t === "kanban" || t === "gantt" || t === "sessions") return t;
+    return "files";
+  };
+  const [activeTab, setActiveTab] = useState<TabKey>(resolveTab(tabParam));
 
   useEffect(() => {
     if (projectId && !isNaN(projectId)) fetchProjectById(projectId);
-    return () => {
-      // 仅组件卸载时清理，避免项目间切换时闪烁
-    };
   }, [projectId, fetchProjectById]);
 
-  // 响应 URL 中 tab 参数变化
   useEffect(() => {
-    if (tabParam === "kanban" || tabParam === "gantt") {
-      setActiveView(tabParam);
-    }
+    setActiveTab(resolveTab(tabParam));
   }, [tabParam]);
+
+  // 恢复工作会话
+  const handleRestoreSession = (session: WorkSession) => {
+    try {
+      const parsed = JSON.parse(session.open_files);
+      if (Array.isArray(parsed)) setOpenFiles(parsed);
+    } catch {
+      /* ignore */
+    }
+    setActiveTab(session.active_tab as TabKey);
+    if (session.active_kanban_card_id) {
+      setActiveKanbanCardId(session.active_kanban_card_id);
+    }
+  };
 
   if (loading) {
     return (
@@ -54,10 +72,7 @@ export default function ProjectDetailPage() {
         <span className="text-sm" style={{ color: "var(--text-muted)" }}>
           无效的项目 ID
         </span>
-        <button
-          className="btn btn-ghost btn-sm"
-          onClick={() => navigate("/projects")}
-        >
+        <button className="btn btn-ghost btn-sm" onClick={() => navigate("/projects")}>
           返回项目列表
         </button>
       </div>
@@ -70,10 +85,7 @@ export default function ProjectDetailPage() {
         <span className="text-sm" style={{ color: "var(--text-muted)" }}>
           项目不存在
         </span>
-        <button
-          className="btn btn-ghost btn-sm"
-          onClick={() => navigate("/projects")}
-        >
+        <button className="btn btn-ghost btn-sm" onClick={() => navigate("/projects")}>
           返回项目列表
         </button>
       </div>
@@ -84,13 +96,10 @@ export default function ProjectDetailPage() {
 
   return (
     <div className="flex flex-col h-full animate-slide-up">
-      {/* 页头 */}
+      {/* 顶部信息栏 */}
       <div
         className="flex items-center gap-4 px-6 h-14 shrink-0 border-b"
-        style={{
-          background: "var(--bg-surface)",
-          borderColor: "var(--border-light)",
-        }}
+        style={{ background: "var(--bg-surface)", borderColor: "var(--border-light)" }}
       >
         <button
           onClick={() => navigate(-1)}
@@ -101,10 +110,7 @@ export default function ProjectDetailPage() {
           <ArrowLeft size={16} strokeWidth={1.5} />
         </button>
         <div className="flex-1 min-w-0 flex items-center gap-3">
-          <h1
-            className="text-title truncate"
-            style={{ color: "var(--text-primary)" }}
-          >
+          <h1 className="text-title truncate" style={{ color: "var(--text-primary)" }}>
             {currentProject.name}
           </h1>
           <button
@@ -115,24 +121,52 @@ export default function ProjectDetailPage() {
           >
             <Pencil size={14} strokeWidth={1.5} />
           </button>
+          {currentProject.project_number && (
+            <span className="badge shrink-0" style={{ fontSize: "10px" }}>
+              {currentProject.project_number}
+            </span>
+          )}
+          {currentProject.project_type && (
+            <span className="badge shrink-0" style={{ fontSize: "10px" }}>
+              {parsedTypes.find((t) => t.id === currentProject.project_type)?.name ||
+                currentProject.project_type}
+            </span>
+          )}
+          {statusConfig && (
+            <span
+              className="badge inline-flex items-center gap-1.5 shrink-0"
+              style={{
+                background: "var(--gold-glow)",
+                color: statusConfig.color ?? "var(--text-secondary)",
+                fontSize: "10px",
+              }}
+            >
+              <span
+                className="w-1.5 h-1.5 rounded-full inline-block"
+                style={{ background: statusConfig.color ?? "var(--text-muted)" }}
+              />
+              {statusConfig.name ?? currentProject.status}
+            </span>
+          )}
         </div>
       </div>
 
-      {/* 视图切换 Tab */}
+      {/* 标签页 */}
       <div
         className="flex items-center gap-1 px-6 h-10 shrink-0"
         style={{ background: "var(--bg-surface)" }}
       >
         <div className="tab-group">
           {([
-            { key: "detail", label: "项目详情" },
-            { key: "kanban", label: "项目看板" },
-            { key: "gantt", label: "项目甘特图" },
-          ] as const).map((tab) => (
+            { key: "files" as TabKey, label: "文件管理" },
+            { key: "kanban" as TabKey, label: "看板" },
+            { key: "gantt" as TabKey, label: "甘特图" },
+            { key: "sessions" as TabKey, label: "工作会话" },
+          ]).map((tab) => (
             <button
               key={tab.key}
-              onClick={() => setActiveView(tab.key)}
-              className={`tab-item ${activeView === tab.key ? "active" : ""}`}
+              onClick={() => setActiveTab(tab.key)}
+              className={`tab-item ${activeTab === tab.key ? "active" : ""}`}
             >
               {tab.label}
             </button>
@@ -152,131 +186,52 @@ export default function ProjectDetailPage() {
 
       {/* 内容区 */}
       <div className="flex-1 overflow-auto">
-        {activeView === "detail" && (
+        {activeTab === "files" && (
           <div className="p-6 space-y-6">
-        {/* 项目信息卡片 */}
-        <div className="card">
-          <h2
-            className="text-lg mb-4"
-            style={{ color: "var(--text-primary)" }}
-          >
-            项目信息
-          </h2>
+            {/* 项目信息摘要（可折叠） */}
+            <ProjectInfoSummary
+              project={currentProject}
+              statusConfig={statusConfig}
+              parsedTypes={parsedTypes}
+            />
 
-          <div className="grid grid-cols-2 gap-x-8 gap-y-3">
-            {/* 项目名称 */}
-            <InfoItem
-              label="项目名称"
-              value={currentProject.name}
-            />
-            {/* 项目编号 */}
-            <InfoItem
-              label="项目编号"
-              value={currentProject.project_number || "—"}
-            />
-            {/* 项目分类 */}
-            <InfoItem
-              label="项目分类"
-              value={parsedTypes.find(t => t.id === currentProject.project_type)?.name || currentProject.project_type || "—"}
-            />
-            {/* 项目状态 */}
-            <div>
-              <span
-                className="text-[11px] block mb-0.5"
-                style={{ color: "var(--text-muted)" }}
-              >
-                项目状态
-              </span>
-              <span
-                className="badge inline-flex items-center gap-1.5"
-                style={{
-                  background: "var(--gold-glow)",
-                  color: statusConfig?.color ?? "var(--text-secondary)",
-                }}
-              >
-                <span
-                  className="w-1.5 h-1.5 rounded-full inline-block"
-                  style={{ background: statusConfig?.color ?? "var(--text-muted)" }}
-                />
-                {(statusConfig?.name ?? currentProject.status) || "—"}
-              </span>
+            {/* 文件管理 */}
+            <div className="card">
+              {currentProject?.folder_path ? (
+                <FileExplorer folderPath={currentProject.folder_path} />
+              ) : (
+                <FilePanel projectId={projectId} />
+              )}
             </div>
-            {/* 开始日期 */}
-            <InfoItem
-              label="开始日期"
-              value={formatDate(currentProject.start_date)}
-              icon={<Calendar size={12} strokeWidth={1.5} />}
-            />
-            {/* 截止日期 */}
-            <InfoItem
-              label="截止日期"
-              value={formatDate(currentProject.end_date)}
-              icon={<Calendar size={12} strokeWidth={1.5} />}
-            />
-            {/* 状态变更时间 */}
-            <InfoItem
-              label="状态变更时间"
-              value={formatDateTime(currentProject.status_changed_at)}
-              icon={<Clock size={12} strokeWidth={1.5} />}
-            />
-            {/* 创建时间 */}
-            <InfoItem
-              label="创建时间"
-              value={formatDateTime(currentProject.created_at)}
-              icon={<Clock size={12} strokeWidth={1.5} />}
-            />
-            {/* 更新时间 */}
-            <InfoItem
-              label="更新时间"
-              value={formatDateTime(currentProject.updated_at)}
-              icon={<Clock size={12} strokeWidth={1.5} />}
-            />
-            {/* 创建人 */}
-            <InfoItem
-              label="创建人"
-              value={currentProject.created_by || "—"}
-            />
-          </div>
-
-          {/* 项目描述 */}
-          {currentProject.description && (
-            <div className="mt-4 pt-4 border-t" style={{ borderColor: "var(--border-light)" }}>
-              <span
-                className="text-[11px] block mb-1"
-                style={{ color: "var(--text-muted)" }}
-              >
-                项目描述
-              </span>
-              <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-                {currentProject.description}
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* 文件列表 */}
-        <div className="card">
-          <h2
-            className="text-lg mb-4 flex items-center gap-2"
-            style={{ color: "var(--text-primary)" }}
-          >
-            <FolderOpen size={16} strokeWidth={1.5} />
-            项目文件
-          </h2>
-          {currentProject?.folder_path
-            ? <FileExplorer folderPath={currentProject.folder_path} />
-            : <FilePanel projectId={projectId} />}
-        </div>
           </div>
         )}
-        {activeView === "kanban" && (
-          <div className="p-6">
+        {activeTab === "kanban" && (
+          <div className="p-6 h-full">
             <KanbanBoard projectId={projectId} />
           </div>
         )}
-        {activeView === "gantt" && (
+        {activeTab === "gantt" && (
           <div className="p-6">
             <GanttChart projectId={projectId} />
+          </div>
+        )}
+        {activeTab === "sessions" && (
+          <div className="p-6">
+            <div className="card">
+              <div className="flex items-center gap-2 mb-4">
+                <BookMarked size={15} strokeWidth={1.5} style={{ color: "var(--gold)" }} />
+                <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                  工作会话
+                </span>
+              </div>
+              <WorkSessionPanel
+                projectId={projectId}
+                activeTab={activeTab === "sessions" ? "files" : activeTab}
+                activeKanbanCardId={activeKanbanCardId}
+                openFiles={openFiles}
+                onRestore={handleRestoreSession}
+              />
+            </div>
           </div>
         )}
       </div>
@@ -298,26 +253,87 @@ export default function ProjectDetailPage() {
   );
 }
 
-function InfoItem({
+/** 项目信息摘要（文件管理标签页内显示） */
+function ProjectInfoSummary({
+  project,
+  statusConfig,
+  parsedTypes,
+}: {
+  project: import("@/types").Project;
+  statusConfig?: import("@/types").ProjectStatusConfig;
+  parsedTypes: import("@/types").ProjectTypeConfig[];
+}) {
+  return (
+    <div className="card">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-2">
+        <MiniInfo label="编号" value={project.project_number || "—"} />
+        <MiniInfo
+          label="分类"
+          value={
+            parsedTypes.find((t) => t.id === project.project_type)?.name ||
+            project.project_type ||
+            "—"
+          }
+        />
+        <MiniInfo
+          label="状态"
+          value={statusConfig?.name ?? project.status ?? "—"}
+          color={statusConfig?.color}
+        />
+        <MiniInfo label="创建人" value={project.created_by || "—"} />
+        <MiniInfo
+          label="开始"
+          value={formatDate(project.start_date)}
+          icon={<Calendar size={11} strokeWidth={1.5} />}
+        />
+        <MiniInfo
+          label="截止"
+          value={formatDate(project.end_date)}
+          icon={<Calendar size={11} strokeWidth={1.5} />}
+        />
+        <MiniInfo
+          label="创建时间"
+          value={formatDateTime(project.created_at)}
+          icon={<Clock size={11} strokeWidth={1.5} />}
+        />
+        <MiniInfo
+          label="更新时间"
+          value={formatDateTime(project.updated_at)}
+          icon={<Clock size={11} strokeWidth={1.5} />}
+        />
+      </div>
+      {project.description && (
+        <p
+          className="mt-2 text-xs leading-relaxed truncate"
+          style={{ color: "var(--text-muted)" }}
+          title={project.description}
+        >
+          {project.description}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function MiniInfo({
   label,
   value,
   icon,
+  color,
 }: {
   label: string;
   value: string;
   icon?: React.ReactNode;
+  color?: string;
 }) {
   return (
-    <div>
-      <span
-        className="text-[11px] block mb-0.5"
-        style={{ color: "var(--text-muted)" }}
-      >
-        {label}
+    <div className="flex items-center gap-1.5">
+      <span className="text-[10px] shrink-0" style={{ color: "var(--text-muted)" }}>
+        {label}:
       </span>
       <span
-        className="text-sm flex items-center gap-1.5"
-        style={{ color: "var(--text-primary)" }}
+        className="text-xs truncate flex items-center gap-1"
+        style={{ color: color || "var(--text-primary)" }}
       >
         {icon}
         {value}

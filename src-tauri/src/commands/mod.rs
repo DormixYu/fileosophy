@@ -1,3 +1,4 @@
+pub mod archive;
 pub mod export;
 pub mod files;
 pub mod folder_scan;
@@ -14,3 +15,4 @@ pub mod status_history;
 pub mod system;
 pub mod user;
 pub mod utils;
+pub mod work_sessions;

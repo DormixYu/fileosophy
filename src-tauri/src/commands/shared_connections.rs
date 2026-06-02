@@ -9,6 +9,7 @@ pub struct SharedConnection {
     pub addr: String,
     pub label: String,
     #[serde(skip_serializing)]
+    #[allow(dead_code)]
     pub password: String,
     pub last_connected: Option<String>,
     pub last_path: String,

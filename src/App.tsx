@@ -5,7 +5,7 @@ import DashboardPage from "@/pages/DashboardPage";
 import ProjectListPage from "@/pages/ProjectListPage";
 import ProjectDetailPage from "@/pages/ProjectDetailPage";
 import GanttPage from "@/pages/GanttPage";
-import SharingPage from "@/pages/SharingPage";
+import ArchivePage from "@/pages/ArchivePage";
 import SettingsPage from "@/pages/SettingsPage";
 import GlobalSearch from "@/components/common/GlobalSearch";
 import ErrorBoundary from "@/components/common/ErrorBoundary";
@@ -95,7 +95,7 @@ function AppContent() {
         <Route path="/projects" element={<ProjectListPage />} />
         <Route path="/project/:id" element={<ProjectDetailPage />} />
         <Route path="/gantt" element={<GanttPage />} />
-        <Route path="/sharing" element={<SharingPage />} />
+        <Route path="/archive" element={<ArchivePage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>
     </Routes>

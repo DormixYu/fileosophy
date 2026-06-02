@@ -65,14 +65,12 @@ export default function DataSection() {
 
   return (
     <section className="animate-slide-up">
-      <div className="flex items-center gap-3 mb-4">
-        <h2 className="text-lg" style={{ color: "var(--text-primary)" }}>
-          数据管理
-        </h2>
-      </div>
+      <h2 className="text-lg font-semibold mb-5" style={{ color: "var(--text-primary)" }}>
+        数据管理
+      </h2>
 
       {/* 导出与导入 */}
-      <div className="flex gap-4 mb-6">
+      <div className="flex gap-3 mb-8">
         <button className="btn btn-primary" onClick={() => setShowExport(true)}>
           <Download size={14} strokeWidth={1.5} />
           导出
@@ -83,12 +81,12 @@ export default function DataSection() {
         </button>
       </div>
 
-      {/* JSON 备份（次要） */}
-      <div style={{ borderTop: "1px solid var(--border-light)", paddingTop: 16 }}>
-        <h3 className="text-base mb-2" style={{ color: "var(--text-secondary)" }}>
+      {/* JSON 备份 */}
+      <div style={{ borderTop: "1px solid var(--border-light)", paddingTop: 20 }}>
+        <h3 className="text-sm font-semibold mb-1.5" style={{ color: "var(--text-primary)" }}>
           完整备份与还原
         </h3>
-        <p className="text-xs mb-3" style={{ color: "var(--text-muted)" }}>
+        <p className="text-xs mb-3 leading-relaxed" style={{ color: "var(--text-muted)" }}>
           JSON 格式备份所有项目数据，可用于跨设备迁移
         </p>
         <div className="flex gap-3">

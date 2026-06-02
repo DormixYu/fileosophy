@@ -11,13 +11,14 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { Plus, Link2, Unlink } from "lucide-react";
+import { Plus, Link2, Unlink, Folder, FileText } from "lucide-react";
 import Spinner from "@/components/common/Spinner";
 import { useKanbanStore } from "@/stores/useKanbanStore";
 import { useGanttStore } from "@/stores/useGanttStore";
 import { useNotificationStore } from "@/stores/useNotificationStore";
-import type { KanbanCard as CardType } from "@/types";
+import type { KanbanCard as CardType, FolderEntry } from "@/types";
 import { kanbanApi, ganttApi } from "@/lib/tauri-api";
+import { cardFileLinkApi, fileApi } from "@/lib/tauri-api";
 import { getToday } from "@/lib/ganttUtils";
 import DatePicker from "@/components/common/DatePicker";
 import Modal, { ConfirmDialog } from "@/components/common/Modal";
@@ -58,6 +59,11 @@ export default function KanbanBoard({ projectId }: Props) {
   // 删除确认
   const [deletingCardId, setDeletingCardId] = useState<number | null>(null);
   const [confirmUnlink, setConfirmUnlink] = useState(false);
+
+  // 文件关联
+  const [linkFileCard, setLinkFileCard] = useState<CardType | null>(null);
+  const [linkFileFolderEntries, setLinkFileFolderEntries] = useState<FolderEntry[]>([]);
+  const [linkFileProjectFolder, setLinkFileProjectFolder] = useState<string>("");
 
   useEffect(() => {
     fetchBoard(projectId);
@@ -228,6 +234,45 @@ export default function KanbanBoard({ projectId }: Props) {
     setDeletingCardId(null);
   };
 
+  // 文件关联处理
+  const handleOpenFilePicker = async (card: CardType) => {
+    setLinkFileCard(card);
+    setLinkFileFolderEntries([]);
+    setLinkFileProjectFolder("");
+    // 获取项目文件夹路径
+    try {
+      const { projectApi } = await import("@/lib/tauri-api");
+      const project = await projectApi.getById(projectId);
+      if (project?.folder_path) {
+        setLinkFileProjectFolder(project.folder_path);
+        const entries = await fileApi.listFolderContents(project.folder_path);
+        setLinkFileFolderEntries(entries.children ?? []);
+      }
+    } catch {
+      // ignore - show empty
+    }
+  };
+
+  const handleLinkFile = async (name: string, path: string, linkType: string) => {
+    if (!linkFileCard) return;
+    try {
+      await cardFileLinkApi.add(linkFileCard.id, name, path, linkType);
+      fetchBoard(projectId);
+      addToast({ type: "success", title: "文件已关联", message: name });
+    } catch (e) {
+      addToast({ type: "error", title: "关联失败", message: String(e) });
+    }
+  };
+
+  const handleRemoveFileLink = async (cardId: number, filePath: string) => {
+    try {
+      await cardFileLinkApi.remove(cardId, filePath);
+      fetchBoard(projectId);
+    } catch (e) {
+      addToast({ type: "error", title: "移除失败", message: String(e) });
+    }
+  };
+
   if (!board) {
     return (
       <div className="text-center py-12">
@@ -243,7 +288,7 @@ export default function KanbanBoard({ projectId }: Props) {
         collisionDetection={closestCenter}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex gap-4 h-full overflow-x-auto pb-4">
+        <div className="flex gap-5 h-full overflow-x-auto pb-4 scrollbar-hide" style={{ scrollBehavior: "smooth" }}>
           {board.columns.map((column) => (
             <SortableContext
               key={column.id}
@@ -255,6 +300,8 @@ export default function KanbanBoard({ projectId }: Props) {
                 onCardClick={handleCardClick}
                 onCardDelete={handleDeleteCard}
                 onCardComplete={handleCardComplete}
+                onCardRemoveFileLink={handleRemoveFileLink}
+                onCardAddFileLink={handleOpenFilePicker}
                 onAddTask={(columnId) => {
                   setAddTaskColumnId(columnId);
                   setAddTaskName("");
@@ -304,14 +351,26 @@ export default function KanbanBoard({ projectId }: Props) {
           ) : (
             <button
               onClick={() => setShowAddColumn(true)}
-              className="w-72 shrink-0 rounded-lg p-3 flex items-center justify-center gap-2 text-xs transition-all hover-gold-border"
+              className="w-72 shrink-0 rounded-xl p-4 flex items-center justify-center gap-2 text-xs transition-all"
               style={{
                 background: "var(--bg-surface-alt)",
-                border: "1px dashed var(--border-default)",
+                border: "2px dashed var(--border-light)",
                 color: "var(--text-muted)",
+                cursor: "pointer",
+                minHeight: "120px",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = "var(--gold)";
+                e.currentTarget.style.color = "var(--gold)";
+                e.currentTarget.style.background = "var(--gold-glow)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = "var(--border-light)";
+                e.currentTarget.style.color = "var(--text-muted)";
+                e.currentTarget.style.background = "var(--bg-surface-alt)";
               }}
             >
-              <Plus size={14} strokeWidth={1.5} />
+              <Plus size={16} strokeWidth={1.5} />
               添加列
             </button>
           )}
@@ -527,6 +586,56 @@ export default function KanbanBoard({ projectId }: Props) {
         onConfirm={confirmUnlinkFromGantt}
         onClose={() => setConfirmUnlink(false)}
       />
+
+      {/* 文件选择器 Modal */}
+      <Modal
+        open={linkFileCard !== null}
+        onClose={() => setLinkFileCard(null)}
+        title={`关联文件 — ${linkFileCard?.title ?? ""}`}
+      >
+        <div className="space-y-2" style={{ maxHeight: 400, overflowY: "auto" }}>
+          {linkFileFolderEntries.length === 0 ? (
+            <p className="text-xs text-center py-4" style={{ color: "var(--text-muted)" }}>
+              {linkFileProjectFolder ? "项目文件夹为空" : "项目未设置文件夹路径"}
+            </p>
+          ) : (
+            linkFileFolderEntries.map((entry) => (
+              <button
+                key={entry.path}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left transition-all"
+                style={{
+                  background: "var(--bg-surface-alt)",
+                  border: "1px solid var(--border-light)",
+                  color: "var(--text-primary)",
+                  cursor: "pointer",
+                }}
+                onClick={() => {
+                  handleLinkFile(entry.name, entry.path, entry.is_dir ? "folder" : "file");
+                  setLinkFileCard(null);
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "var(--gold-glow)";
+                  e.currentTarget.style.borderColor = "var(--gold)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "var(--bg-surface-alt)";
+                  e.currentTarget.style.borderColor = "var(--border-light)";
+                }}
+              >
+                {entry.is_dir ? (
+                  <Folder size={14} strokeWidth={1.5} style={{ color: "var(--gold)", flexShrink: 0 }} />
+                ) : (
+                  <FileText size={14} strokeWidth={1.5} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
+                )}
+                <span className="text-sm truncate">{entry.name}</span>
+                <span className="text-[10px] ml-auto" style={{ color: "var(--text-dim)" }}>
+                  {entry.is_dir ? "文件夹" : ""}
+                </span>
+              </button>
+            ))
+          )}
+        </div>
+      </Modal>
     </>
   );
 }

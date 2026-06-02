@@ -32,21 +32,23 @@ export default function BatchStatusDropdown({
       </button>
       {open && (
         <div
-          className="absolute z-50 right-0 top-full mt-1 min-w-[140px] p-2 rounded-lg animate-scale-in"
+          className="absolute z-50 right-0 top-full mt-1.5 min-w-[150px] py-1 animate-scale-in"
           style={{
             background: "var(--bg-elevated)",
-            border: "1px solid var(--border-light)",
-            boxShadow: "var(--shadow-gold-lg)",
+            border: "1px solid var(--border-default)",
+            borderRadius: "var(--radius-md)",
+            boxShadow: "var(--shadow-lg)",
           }}
         >
           {statuses.map((s) => (
             <button
               key={s.id}
-              className="w-full text-left px-2 py-1.5 rounded-md text-xs transition-colors flex items-center gap-2 hover-gold-bg"
+              className="w-full text-left px-3 py-1.5 text-xs transition-colors flex items-center gap-2 hover-surface-alt-bg"
               style={{
                 color: "var(--text-secondary)",
                 cursor: "pointer",
                 border: "none",
+                background: "none",
               }}
               onClick={() => {
                 onApply(s.id as ProjectStatus);
@@ -54,7 +56,7 @@ export default function BatchStatusDropdown({
               }}
             >
               <span
-                className="w-1.5 h-1.5 rounded-full inline-block shrink-0"
+                className="w-2 h-2 rounded-full inline-block shrink-0"
                 style={{ background: s.color }}
               />
               {s.name}

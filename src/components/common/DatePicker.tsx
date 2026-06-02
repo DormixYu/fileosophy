@@ -19,17 +19,23 @@ export default function DatePicker({ value, onChange, placeholder = "选择日�
 
   const defaultStyle: React.CSSProperties = {
     background: "var(--bg-surface)",
-    border: "1px solid var(--border-light)",
-    padding: "4px 8px",
+    border: "1px solid var(--border-default)",
+    padding: "5px 10px",
     color: value ? "var(--text-primary)" : "var(--text-muted)",
-    borderRadius: "6px",
+    borderRadius: "var(--radius-sm)",
   };
 
   return (
     <div
-      className={`relative cursor-pointer text-xs select-none ${className || ""}`}
+      className={`relative cursor-pointer text-xs select-none transition-all ${className || ""}`}
       style={{ ...defaultStyle, ...style }}
       onClick={() => inputRef.current?.showPicker()}
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLElement).style.borderColor = "var(--border-strong)";
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLElement).style.borderColor = "var(--border-default)";
+      }}
     >
       {value ? formatDateCN(value) : placeholder}
 

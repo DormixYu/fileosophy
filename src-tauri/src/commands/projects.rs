@@ -57,7 +57,7 @@ pub fn get_all_projects(db: State<'_, DbConn>) -> Result<Vec<Project>, String> {
     let conn = db.lock().map_err(|e| e.to_string())?;
     let mut stmt = conn
         .prepare(&format!(
-            "SELECT {PROJECT_COLUMNS} FROM projects ORDER BY updated_at DESC"
+            "SELECT {PROJECT_COLUMNS} FROM projects WHERE status IS NULL OR status != 'archived' ORDER BY updated_at DESC"
         ))
         .map_err(|e| e.to_string())?;
 
@@ -213,13 +213,17 @@ pub fn create_project(
 
         let id = conn.last_insert_rowid();
 
-        // 自动创建看板默认列：待办事项 + 已完成事项
+        // 自动创建看板默认列：待办 / 进行中 / 已完成
         conn.execute(
-            "INSERT INTO kanban_columns (project_id, title, position, column_type) VALUES (?1, '待办事项', 0, 'todo_pending')",
+            "INSERT INTO kanban_columns (project_id, title, position, column_type) VALUES (?1, '待办', 0, 'todo_pending')",
             rusqlite::params![id],
         ).map_err(|e| e.to_string())?;
         conn.execute(
-            "INSERT INTO kanban_columns (project_id, title, position, column_type) VALUES (?1, '已完成事项', 1, 'todo_done')",
+            "INSERT INTO kanban_columns (project_id, title, position, column_type) VALUES (?1, '进行中', 1, 'in_progress')",
+            rusqlite::params![id],
+        ).map_err(|e| e.to_string())?;
+        conn.execute(
+            "INSERT INTO kanban_columns (project_id, title, position, column_type) VALUES (?1, '已完成', 2, 'todo_done')",
             rusqlite::params![id],
         ).map_err(|e| e.to_string())?;
 

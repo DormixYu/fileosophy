@@ -194,6 +194,13 @@ export interface KanbanCard {
   updated_at: string;
   gantt_task_id?: number | null;
   due_date?: string | null;
+  linked_files?: CardFileLink[];
+}
+
+export interface CardFileLink {
+  name: string;
+  path: string;
+  type: "file" | "folder";
 }
 
 export interface CreateCardData {
@@ -286,6 +293,34 @@ export const INLINE_PREVIEW_EXTS = new Set([
 export function getFileExt(name: string): string {
   const idx = name.lastIndexOf(".");
   return idx >= 0 ? name.slice(idx + 1).toLowerCase() : "";
+}
+
+// ── 文件标记/备注 ──────────────────────────────────────────────
+
+export interface FileBookmark {
+  id: number;
+  project_id: number;
+  file_name: string;
+  file_path: string;
+  note: string | null;
+  starred: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// ── 归档项目 ──────────────────────────────────────────────────
+
+export interface ArchivedProject {
+  id: number;
+  project_id: number;
+  project_name: string;
+  project_number: string;
+  project_type: string;
+  category: string;
+  original_folder_path: string;
+  archive_path: string;
+  file_size: number;
+  archived_at: string;
 }
 
 // ── 应用设置 ──────────────────────────────────────────────────
@@ -453,7 +488,7 @@ export interface FolderEntry {
 // ── 全局搜索 ──────────────────────────────────────────────────
 
 export interface SearchResult {
-  result_type: "project" | "card" | "task" | "file";
+  result_type: "project" | "card" | "task" | "file" | "bookmark";
   id: number;
   title: string;
   detail: string;
@@ -490,3 +525,26 @@ export const DEFAULT_SHORTCUTS: ShortcutConfig[] = [
     description: "打开全局搜索面板",
   },
 ];
+
+// ── 工作会话 ──────────────────────────────────────────────
+
+export interface WorkSession {
+  id: number;
+  project_id: number;
+  name: string;
+  open_files: string; // JSON 数组
+  active_tab: "files" | "kanban" | "gantt";
+  active_kanban_card_id: number | null;
+  scroll_positions: string | null; // JSON 对象
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SaveWorkSessionData {
+  project_id: number;
+  name?: string;
+  open_files: string; // JSON 数组
+  active_tab: string;
+  active_kanban_card_id?: number | null;
+  scroll_positions?: string | null;
+}

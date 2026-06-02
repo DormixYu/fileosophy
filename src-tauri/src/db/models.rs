@@ -52,6 +52,16 @@ pub struct KanbanCard {
     pub gantt_task_id: Option<i64>,
     #[serde(default)]
     pub due_date: Option<String>,
+    #[serde(default)]
+    pub linked_files: Vec<CardFileLink>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CardFileLink {
+    pub name: String,
+    pub path: String,
+    #[serde(rename = "type")]
+    pub link_type: String, // "file" or "folder"
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -187,11 +197,40 @@ pub struct SharedProject {
     pub remote_project_name: String,
     pub remote_owner: String,
     #[serde(skip_serializing)]
+    #[allow(dead_code)]
     pub password: String,
     pub role: String, // "owner" | "member"
     pub last_synced: Option<String>,
     pub status: String, // "connected" | "disconnected"
     pub created_at: String,
+}
+
+/// 文件标记/备注
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct FileBookmark {
+    pub id: i64,
+    pub project_id: i64,
+    pub file_name: String,
+    pub file_path: String,
+    pub note: Option<String>,
+    pub starred: bool,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// 归档项目记录
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ArchivedProject {
+    pub id: i64,
+    pub project_id: i64,
+    pub project_name: String,
+    pub project_number: String,
+    pub project_type: String,
+    pub category: String,
+    pub original_folder_path: String,
+    pub archive_path: String,
+    pub file_size: i64,
+    pub archived_at: String,
 }
 
 /// 扫描到的文件夹信息（用于文件夹导入）
@@ -210,4 +249,18 @@ pub struct ScannedFolder {
     pub confidence: String,       // "high" / "medium" / "low"
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub conflict_reason: Option<String>,
+}
+
+/// 工作会话（保存/恢复工作状态）
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct WorkSession {
+    pub id: i64,
+    pub project_id: i64,
+    pub name: String,
+    pub open_files: String,          // JSON 数组：文件路径/ID
+    pub active_tab: String,          // "files" | "kanban" | "gantt"
+    pub active_kanban_card_id: Option<i64>,
+    pub scroll_positions: Option<String>, // JSON 对象
+    pub created_at: String,
+    pub updated_at: String,
 }

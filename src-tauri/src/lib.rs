@@ -87,6 +87,10 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            // 归档管理
+            commands::archive::archive_project,
+            commands::archive::unarchive_project,
+            commands::archive::get_archived_projects,
             // 项目管理
             commands::projects::get_all_projects,
             commands::projects::get_project_by_id,
@@ -105,6 +109,8 @@ pub fn run() {
             commands::kanban::link_card_to_gantt,
             commands::kanban::unlink_card_from_gantt,
             commands::kanban::sync_gantt_to_kanban,
+            commands::kanban::add_card_file_link,
+            commands::kanban::remove_card_file_link,
             // 甘特图
             commands::gantt::get_gantt_data,
             commands::gantt::add_gantt_task,
@@ -120,6 +126,11 @@ pub fn run() {
             commands::files::share_file_over_network,
             commands::files::discover_peers,
             commands::files::list_folder_contents,
+            // 文件标记/备注
+            commands::files::create_file_bookmark,
+            commands::files::get_file_bookmarks,
+            commands::files::update_file_bookmark,
+            commands::files::delete_file_bookmark,
             // 文件传输 token
             sharing::get_transfer_token,
             // 文件夹分享
@@ -190,6 +201,11 @@ pub fn run() {
             commands::folder_share::sync_shared_project,
             commands::folder_share::disconnect_shared_project,
             commands::folder_share::get_remote_project_info,
+            // 工作会话
+            commands::work_sessions::save_work_session,
+            commands::work_sessions::get_work_sessions,
+            commands::work_sessions::restore_work_session,
+            commands::work_sessions::delete_work_session,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

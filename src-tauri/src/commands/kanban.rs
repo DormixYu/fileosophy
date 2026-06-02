@@ -1,5 +1,5 @@
 use crate::db::DbConn;
-use crate::db::models::{GanttTask, KanbanBoard, KanbanCard, KanbanColumn};
+use crate::db::models::{CardFileLink, GanttTask, KanbanBoard, KanbanCard, KanbanColumn};
 use crate::events;
 use super::gantt::row_to_gantt_task;
 use tauri::{AppHandle, Emitter, State};
@@ -24,6 +24,8 @@ const COLUMN_SELECT: &str =
 fn row_to_card(row: &rusqlite::Row) -> rusqlite::Result<KanbanCard> {
     let tags_str: String = row.get(5)?;
     let tags: Vec<String> = serde_json::from_str(&tags_str).unwrap_or_default();
+    let linked_files_str: String = row.get(10).unwrap_or_else(|_| "[]".to_string());
+    let linked_files: Vec<CardFileLink> = serde_json::from_str(&linked_files_str).unwrap_or_default();
     Ok(KanbanCard {
         id: row.get(0)?,
         column_id: row.get(1)?,
@@ -35,11 +37,12 @@ fn row_to_card(row: &rusqlite::Row) -> rusqlite::Result<KanbanCard> {
         updated_at: row.get(7)?,
         gantt_task_id: row.get(8)?,
         due_date: row.get(9)?,
+        linked_files,
     })
 }
 
 const CARD_SELECT: &str =
-    "id, column_id, title, description, position, tags, created_at, updated_at, gantt_task_id, due_date";
+    "id, column_id, title, description, position, tags, created_at, updated_at, gantt_task_id, due_date, linked_files";
 
 #[tauri::command]
 pub fn get_kanban_board(db: State<'_, DbConn>, project_id: i64) -> Result<KanbanBoard, String> {
@@ -565,6 +568,130 @@ pub fn sync_gantt_to_kanban(
         [id],
         row_to_card,
     ).map_err(|e| e.to_string())?;
+
+    Ok(card)
+}
+
+// ── 卡片文件关联命令 ────────────────────────────────────────────
+
+#[tauri::command]
+pub fn add_card_file_link(
+    app: AppHandle,
+    db: State<'_, DbConn>,
+    card_id: i64,
+    file_name: String,
+    file_path: String,
+    link_type: String,
+) -> Result<KanbanCard, String> {
+    let conn = db.lock().map_err(|e| e.to_string())?;
+
+    let linked_files_str: String = conn
+        .query_row(
+            "SELECT COALESCE(linked_files, '[]') FROM kanban_cards WHERE id = ?1",
+            [card_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+
+    let mut linked_files: Vec<CardFileLink> =
+        serde_json::from_str(&linked_files_str).unwrap_or_default();
+
+    // 防止重复
+    if linked_files.iter().any(|f| f.path == file_path) {
+        return Err("文件已关联".to_string());
+    }
+
+    linked_files.push(CardFileLink {
+        name: file_name,
+        path: file_path,
+        link_type,
+    });
+
+    let new_json = serde_json::to_string(&linked_files).unwrap_or_else(|_| "[]".to_string());
+    conn.execute(
+        "UPDATE kanban_cards SET linked_files = ?1, updated_at = datetime('now') WHERE id = ?2",
+        rusqlite::params![new_json, card_id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let card = conn
+        .query_row(
+            &format!("SELECT {CARD_SELECT} FROM kanban_cards WHERE id = ?1"),
+            [card_id],
+            row_to_card,
+        )
+        .map_err(|e| e.to_string())?;
+
+    let project_id: Option<i64> = conn
+        .query_row(
+            "SELECT kc.project_id FROM kanban_cards c JOIN kanban_columns kc ON c.column_id = kc.id WHERE c.id = ?1",
+            [card_id],
+            |row| row.get(0),
+        )
+        .ok();
+
+    drop(conn);
+    if let Some(pid) = project_id {
+        let _ = app.emit(
+            events::EVENT_PROJECT_UPDATED,
+            serde_json::json!({ "project_id": pid }),
+        );
+    }
+
+    Ok(card)
+}
+
+#[tauri::command]
+pub fn remove_card_file_link(
+    app: AppHandle,
+    db: State<'_, DbConn>,
+    card_id: i64,
+    file_path: String,
+) -> Result<KanbanCard, String> {
+    let conn = db.lock().map_err(|e| e.to_string())?;
+
+    let linked_files_str: String = conn
+        .query_row(
+            "SELECT COALESCE(linked_files, '[]') FROM kanban_cards WHERE id = ?1",
+            [card_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+
+    let mut linked_files: Vec<CardFileLink> =
+        serde_json::from_str(&linked_files_str).unwrap_or_default();
+    linked_files.retain(|f| f.path != file_path);
+
+    let new_json = serde_json::to_string(&linked_files).unwrap_or_else(|_| "[]".to_string());
+    conn.execute(
+        "UPDATE kanban_cards SET linked_files = ?1, updated_at = datetime('now') WHERE id = ?2",
+        rusqlite::params![new_json, card_id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let card = conn
+        .query_row(
+            &format!("SELECT {CARD_SELECT} FROM kanban_cards WHERE id = ?1"),
+            [card_id],
+            row_to_card,
+        )
+        .map_err(|e| e.to_string())?;
+
+    let project_id: Option<i64> = conn
+        .query_row(
+            "SELECT kc.project_id FROM kanban_cards c JOIN kanban_columns kc ON c.column_id = kc.id WHERE c.id = ?1",
+            [card_id],
+            |row| row.get(0),
+        )
+        .ok();
+
+    drop(conn);
+    if let Some(pid) = project_id {
+        let _ = app.emit(
+            events::EVENT_PROJECT_UPDATED,
+            serde_json::json!({ "project_id": pid }),
+        );
+    }
 
     Ok(card)
 }

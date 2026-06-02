@@ -1,5 +1,5 @@
 use crate::db::DbConn;
-use crate::db::models::{FileEntry, FilePreview};
+use crate::db::models::{FileBookmark, FileEntry, FilePreview};
 use crate::events;
 use crate::mdns::{MdnsService, Peer};
 use crate::sharing;
@@ -518,4 +518,125 @@ fn scan_dir(root: &std::path::Path, dir: &std::path::Path, depth: u32) -> Result
         size: 0,
         children: result_children,
     })
+}
+
+// ── 文件标记/备注 ──────────────────────────────────────────────
+
+#[tauri::command]
+pub fn create_file_bookmark(
+    db: State<'_, DbConn>,
+    project_id: i64,
+    file_name: String,
+    file_path: String,
+    note: Option<String>,
+) -> Result<FileBookmark, String> {
+    let conn = db.lock().map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT INTO file_bookmarks (project_id, file_name, file_path, note)
+         VALUES (?1, ?2, ?3, ?4)",
+        rusqlite::params![project_id, file_name, file_path, note.unwrap_or_default()],
+    )
+    .map_err(|e| e.to_string())?;
+    let id = conn.last_insert_rowid();
+    conn.query_row(
+        "SELECT id, project_id, file_name, file_path, note, starred, created_at, updated_at
+         FROM file_bookmarks WHERE id = ?1",
+        [id],
+        |row| {
+            Ok(FileBookmark {
+                id: row.get(0)?,
+                project_id: row.get(1)?,
+                file_name: row.get(2)?,
+                file_path: row.get(3)?,
+                note: row.get(4)?,
+                starred: row.get::<_, i32>(5)? != 0,
+                created_at: row.get(6)?,
+                updated_at: row.get(7)?,
+            })
+        },
+    )
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn get_file_bookmarks(
+    db: State<'_, DbConn>,
+    project_id: i64,
+) -> Result<Vec<FileBookmark>, String> {
+    let conn = db.lock().map_err(|e| e.to_string())?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, project_id, file_name, file_path, note, starred, created_at, updated_at
+             FROM file_bookmarks WHERE project_id = ?1 ORDER BY starred DESC, updated_at DESC",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([project_id], |row| {
+            Ok(FileBookmark {
+                id: row.get(0)?,
+                project_id: row.get(1)?,
+                file_name: row.get(2)?,
+                file_path: row.get(3)?,
+                note: row.get(4)?,
+                starred: row.get::<_, i32>(5)? != 0,
+                created_at: row.get(6)?,
+                updated_at: row.get(7)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    let mut bookmarks = Vec::new();
+    for row in rows {
+        bookmarks.push(row.map_err(|e| e.to_string())?);
+    }
+    Ok(bookmarks)
+}
+
+#[tauri::command]
+pub fn update_file_bookmark(
+    db: State<'_, DbConn>,
+    id: i64,
+    note: Option<String>,
+    starred: Option<bool>,
+) -> Result<FileBookmark, String> {
+    let conn = db.lock().map_err(|e| e.to_string())?;
+    if let Some(n) = &note {
+        conn.execute(
+            "UPDATE file_bookmarks SET note = ?1, updated_at = datetime('now') WHERE id = ?2",
+            rusqlite::params![n, id],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    if let Some(s) = starred {
+        conn.execute(
+            "UPDATE file_bookmarks SET starred = ?1, updated_at = datetime('now') WHERE id = ?2",
+            rusqlite::params![s as i32, id],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    conn.query_row(
+        "SELECT id, project_id, file_name, file_path, note, starred, created_at, updated_at
+         FROM file_bookmarks WHERE id = ?1",
+        [id],
+        |row| {
+            Ok(FileBookmark {
+                id: row.get(0)?,
+                project_id: row.get(1)?,
+                file_name: row.get(2)?,
+                file_path: row.get(3)?,
+                note: row.get(4)?,
+                starred: row.get::<_, i32>(5)? != 0,
+                created_at: row.get(6)?,
+                updated_at: row.get(7)?,
+            })
+        },
+    )
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn delete_file_bookmark(db: State<'_, DbConn>, id: i64) -> Result<(), String> {
+    let conn = db.lock().map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM file_bookmarks WHERE id = ?1", [id])
+        .map_err(|e| e.to_string())?;
+    Ok(())
 }

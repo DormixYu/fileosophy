@@ -1,14 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Link } from "react-router-dom";
 import {
-  Share2,
   Pencil,
   Trash2,
   ArrowUp,
   ArrowDown,
+  Archive,
 } from "lucide-react";
 import { formatDate } from "@/lib/formatUtils";
-import { normalizePath } from "@/components/sharing/ActiveShareRow";
 import InCellStatusDropdown from "./InCellStatusDropdown";
 import type {
   Project,
@@ -25,8 +24,8 @@ export interface SortState {
   dir: SortDir;
 }
 
-const ROW_HEIGHT = 35;
-const HEADER_HEIGHT = 36;
+const ROW_HEIGHT = 40;
+const HEADER_HEIGHT = 38;
 
 // ── 单元格内容渲染 ─────────────────────────────────────────────
 
@@ -50,7 +49,7 @@ function CellContent({
   switch (column.key) {
     case "project_number":
       return (
-        <span className="text-[11px]" style={{ color: "var(--text-secondary)" }}>
+        <span className="text-caption" style={{ color: "var(--text-tertiary)" }}>
           {String(value || "—")}
         </span>
       );
@@ -60,7 +59,7 @@ function CellContent({
         <Link
           to={`/project/${project.id}`}
           className="hover:underline"
-          style={{ color: "var(--text-primary)" }}
+          style={{ color: "var(--text-primary)", fontWeight: 500 }}
         >
           {String(value)}
         </Link>
@@ -92,7 +91,7 @@ function CellContent({
     case "updated_at":
     case "status_changed_at":
       return (
-        <span className="text-[11px]" style={{ color: "var(--text-tertiary)" }}>
+        <span className="text-caption" style={{ color: "var(--text-tertiary)" }}>
           {formatDate(String(value || ""))}
         </span>
       );
@@ -126,12 +125,11 @@ export default function ProjectTable({
   handleToggleSelect,
   handleDoubleClick,
   handleStatusChange,
-  setShareProject,
   setEditProject,
   handleDelete,
+  handleArchive,
   statuses,
   types,
-  shareStatus,
   onColumnResizeLive,
   onColumnResizeEnd,
 }: {
@@ -145,12 +143,11 @@ export default function ProjectTable({
   handleToggleSelect: (id: number) => void;
   handleDoubleClick: (project: Project) => void;
   handleStatusChange: (projectId: number, newStatus: ProjectStatus) => void;
-  setShareProject: (p: Project) => void;
   setEditProject: (p: Project) => void;
   handleDelete: (e: React.MouseEvent, id: number) => void;
+  handleArchive: (e: React.MouseEvent, id: number) => void;
   statuses: ProjectStatusConfig[];
   types: ProjectTypeConfig[];
-  shareStatus: { port: number; path: string }[];
   onColumnResizeLive: (colKey: string, newWidth: number) => void;
   onColumnResizeEnd: () => void;
 }) {
@@ -207,14 +204,18 @@ export default function ProjectTable({
 
   return (
     <div ref={containerRef} className="h-full overflow-auto">
-      <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
+      <table className="w-full text-xs" style={{ borderCollapse: "separate", borderSpacing: 0 }}>
         <thead>
-          <tr style={{ background: "var(--bg-surface-alt)" }}>
+          <tr>
             <th
               className="px-3 py-2.5 select-none"
               style={{
                 width: 36,
                 borderBottom: "1px solid var(--border-default)",
+                background: "var(--bg-surface-alt)",
+                position: "sticky",
+                top: 0,
+                zIndex: 2,
               }}
             >
               <input
@@ -234,9 +235,15 @@ export default function ProjectTable({
                   minWidth: col.key === "name" ? 120 : 40,
                   cursor: col.sortable ? "pointer" : "default",
                   borderBottom: "1px solid var(--border-default)",
-                  letterSpacing: "0.06em",
+                  background: "var(--bg-surface-alt)",
+                  letterSpacing: "0.04em",
                   fontSize: "11px",
+                  fontWeight: 500,
+                  color: "var(--text-muted)",
                   userSelect: resizingKey ? "none" : "auto",
+                  position: "sticky",
+                  top: 0,
+                  zIndex: 2,
                 }}
                 onClick={() => {
                   if (resizingKey) return;
@@ -245,14 +252,12 @@ export default function ProjectTable({
               >
                 <span className="inline-flex items-center gap-1">
                   {col.label}
-                  {col.sortable && (
-                    <span style={{ opacity: sort.key === col.key ? 1 : 0.25 }}>
-                      {sort.key === col.key && sort.dir === "asc" ? (
-                        <ArrowUp size={11} strokeWidth={1.5} />
-                      ) : sort.key === col.key && sort.dir === "desc" ? (
-                        <ArrowDown size={11} strokeWidth={1.5} />
+                  {col.sortable && sort.key === col.key && (
+                    <span style={{ color: "var(--gold)" }}>
+                      {sort.dir === "asc" ? (
+                        <ArrowUp size={11} strokeWidth={2} />
                       ) : (
-                        <ArrowUp size={11} strokeWidth={1.5} style={{ opacity: 0.3 }} />
+                        <ArrowDown size={11} strokeWidth={2} />
                       )}
                     </span>
                   )}
@@ -261,8 +266,11 @@ export default function ProjectTable({
                 {/* 列宽拖拽把手（右侧） */}
                 {i < visibleColumns.length - 1 && (
                   <div
-                    className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-[var(--gold)] transition-colors"
-                    style={{ opacity: resizingKey === col.key ? 1 : 0.15 }}
+                    className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize transition-colors"
+                    style={{
+                      opacity: resizingKey === col.key ? 1 : 0,
+                      background: "var(--gold)",
+                    }}
                     onMouseDown={(e) => handleResizeStart(col.key, col.width, e)}
                   />
                 )}
@@ -271,10 +279,16 @@ export default function ProjectTable({
             <th
               className="text-right px-3 py-2.5"
               style={{
-                color: "var(--text-muted)",
                 width: 80,
                 borderBottom: "1px solid var(--border-default)",
+                background: "var(--bg-surface-alt)",
                 fontSize: "11px",
+                fontWeight: 500,
+                color: "var(--text-muted)",
+                letterSpacing: "0.04em",
+                position: "sticky",
+                top: 0,
+                zIndex: 2,
               }}
             >
               操作
@@ -282,14 +296,21 @@ export default function ProjectTable({
           </tr>
         </thead>
         <tbody>
-          {filtered.map((project) => (
+          {filtered.map((project, rowIndex) => (
             <tr
               key={project.id}
-              className="group transition-colors hover-elevated-bg"
-              style={{ borderBottom: "1px solid var(--border-light)" }}
+              className="group table-row-enter"
+              style={{
+                borderBottom: "1px solid var(--border-light)",
+                animationDelay: `${rowIndex * 30}ms`,
+              }}
               onDoubleClick={() => handleDoubleClick(project)}
             >
-              <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+              <td
+                className="px-3 py-2"
+                style={{ borderBottom: "1px solid var(--border-light)" }}
+                onClick={(e) => e.stopPropagation()}
+              >
                 <input
                   type="checkbox"
                   checked={selectedIds.has(project.id)}
@@ -301,7 +322,10 @@ export default function ProjectTable({
                 <td
                   key={col.key}
                   className={`px-3 py-2 ${col.key === "name" ? "" : "whitespace-nowrap"}`}
-                  style={{ color: "var(--text-primary)" }}
+                  style={{
+                    color: "var(--text-primary)",
+                    borderBottom: "1px solid var(--border-light)",
+                  }}
                 >
                   <CellContent
                     column={col}
@@ -313,31 +337,17 @@ export default function ProjectTable({
                   />
                 </td>
               ))}
-              <td className="px-3 py-2 text-right">
-                <div className="flex items-center justify-end gap-1">
-                                    <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShareProject(project);
-                    }}
-                    className="p-1 rounded transition-colors hover-gold-bg hover-gold-text"
-                    style={{
-                      color: shareStatus.find(s => normalizePath(s.path) === normalizePath(project.folder_path || "")) ? "var(--gold)" : "var(--text-muted)",
-                      background: shareStatus.find(s => normalizePath(s.path) === normalizePath(project.folder_path || "")) ? "var(--gold-glow)" : "none",
-                      border: shareStatus.find(s => normalizePath(s.path) === normalizePath(project.folder_path || "")) ? "1px solid var(--gold)" : "none",
-                      cursor: "pointer",
-                    }}
-                    title="分享项目"
-                    aria-label="分享项目"
-                  >
-                    <Share2 size={13} strokeWidth={1.5} />
-                  </button>
+              <td
+                className="px-3 py-2 text-right"
+                style={{ borderBottom: "1px solid var(--border-light)" }}
+              >
+                <div className="flex items-center justify-end gap-0.5 row-actions">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       setEditProject(project);
                     }}
-                    className="p-1 rounded transition-colors hover-gold-bg hover-gold-text"
+                    className="p-1 rounded transition-colors hover-surface-alt-bg hover-gold-text"
                     style={{ color: "var(--text-muted)", cursor: "pointer", background: "none", border: "none" }}
                     title="编辑项目"
                     aria-label="编辑项目"
@@ -353,6 +363,15 @@ export default function ProjectTable({
                   >
                     <Trash2 size={13} strokeWidth={1.5} />
                   </button>
+                  <button
+                    onClick={(e) => handleArchive(e, project.id)}
+                    className="p-1 rounded transition-colors hover-gold-text"
+                    style={{ color: "var(--text-muted)", cursor: "pointer", background: "none", border: "none" }}
+                    title="归档项目"
+                    aria-label="归档项目"
+                  >
+                    <Archive size={13} strokeWidth={1.5} />
+                  </button>
                 </div>
               </td>
             </tr>
@@ -361,9 +380,9 @@ export default function ProjectTable({
             Array.from({ length: fillRows }, (_, i) => (
               <tr
                 key={`_empty_${i}`}
-                style={{ height: ROW_HEIGHT, borderBottom: "1px solid var(--border-light)" }}
+                style={{ height: ROW_HEIGHT }}
               >
-                <td colSpan={visibleColumns.length + 2} />
+                <td colSpan={visibleColumns.length + 2} style={{ borderBottom: "1px solid var(--border-light)" }} />
               </tr>
             ))}
         </tbody>

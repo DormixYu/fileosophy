@@ -97,6 +97,7 @@ pub struct FolderShareServer {
     root_path: PathBuf,
     clients: Arc<Mutex<Vec<ClientInfo>>>,
     activity_log: Arc<Mutex<Vec<ActivityLogEntry>>>,
+    #[allow(dead_code)]
     project_meta: Option<ShareProjectMeta>,
     #[allow(dead_code)]
     connection_count: Arc<AtomicU32>,

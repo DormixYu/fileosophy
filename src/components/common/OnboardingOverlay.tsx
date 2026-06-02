@@ -246,7 +246,7 @@ export default function OnboardingOverlay({ onComplete }: OnboardingOverlayProps
                     <div
                       className="w-12 h-12 rounded-full flex items-center justify-center"
                       style={{
-                        background: key === "light" ? "#f6f1e6" : key === "dark" ? "#16120e" : "linear-gradient(135deg, #16120e 50%, #f6f1e6 50%)",
+                        background: key === "light" ? "var(--bg-void)" : key === "dark" ? "var(--bg-void)" : "linear-gradient(135deg, var(--bg-void) 50%, var(--bg-surface) 50%)",
                         border: "1px solid var(--border-light)",
                       }}
                     >

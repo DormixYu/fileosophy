@@ -1,17 +1,16 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
-import { Plus, Search, Link as LinkIcon, Trash2, X, Calendar, ChevronDown } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
+import { Plus, Search, Trash2, X, Calendar, ChevronDown, FolderOpen, LayoutGrid, List } from "lucide-react";
 import { useProjectStore } from "@/stores/useProjectStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 import { useNotificationStore } from "@/stores/useNotificationStore";
-import { projectApi, shareApi } from "@/lib/tauri-api";
+import { projectApi, archiveApi } from "@/lib/tauri-api";
 import Modal from "@/components/common/Modal";
 import DatePicker from "@/components/common/DatePicker";
-import ShareProjectDialog from "@/components/common/ShareProjectDialog";
-import JoinShareDialog from "@/components/common/JoinShareDialog";
 import ProjectDialog from "@/components/project/ProjectDialog";
 import BatchStatusDropdown from "@/components/project/BatchStatusDropdown";
 import ProjectTable, { type SortState } from "@/components/project/ProjectTable";
-import { normalizePath } from "@/components/sharing/ActiveShareRow";
+import ProjectCard from "@/components/project/ProjectCard";
 import type {
   Project,
   ProjectStatus,
@@ -26,6 +25,7 @@ interface SavedFilters {
 
 const FILTERS_KEY = "project_filters";
 const DEFAULT_FILTERS: SavedFilters = { status: [], type: [], startDate: "", endDate: "" };
+const VIEW_MODE_KEY = "project_view_mode";
 
 export default function ProjectListPage() {
   const { projects, fetchProjects, createProject, updateProject, deleteProject, loading, consumeCreateProject, pendingCreateProject } =
@@ -43,14 +43,34 @@ export default function ProjectListPage() {
   });
   const [sort, setSort] = useState<SortState>({ key: "updated_at", dir: "desc" });
   const [showCreate, setShowCreate] = useState(false);
-  const [showJoinDialog, setShowJoinDialog] = useState(false);
   const [editProject, setEditProject] = useState<Project | null>(null);
-  const [shareProject, setShareProject] = useState<Project | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [shareStatus, setShareStatus] = useState<{ port: number; path: string }[]>([]);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [confirmBatchDelete, setConfirmBatchDelete] = useState(false);
+  const [confirmArchiveId, setConfirmArchiveId] = useState<number | null>(null);
+  const [viewMode, setViewMode] = useState<"table" | "card">(() => {
+    try {
+      const saved = useSettingsStore.getState().settings[VIEW_MODE_KEY];
+      if (saved === "card" || saved === "table") return saved;
+    } catch { /* ignore */ }
+    return "table";
+  });
   const selectAllRef = useRef<HTMLInputElement>(null);
+
+  // 从 URL 搜索参数中读取筛选条件（Dashboard 跳转时传入）
+  const [searchParams] = useSearchParams();
+  useEffect(() => {
+    const statusParam = searchParams.get("status");
+    if (statusParam) {
+      setFilters(prev => {
+        if (prev.status.includes(statusParam)) return prev;
+        const next = { ...prev, status: [statusParam] };
+        persistFilters(next);
+        return next;
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // 筛选变更时自动持久化
   const persistFilters = useCallback((f: SavedFilters) => {
@@ -67,14 +87,9 @@ export default function ProjectListPage() {
     });
   }, [persistFilters]);
 
-  const refreshShareStatus = useCallback(() => {
-    shareApi.getStatus().then(setShareStatus).catch(() => setShareStatus([]));
-  }, []);
-
   useEffect(() => {
     if (projects.length === 0) fetchProjects();
-    refreshShareStatus();
-  }, [projects.length, fetchProjects, refreshShareStatus]);
+  }, [projects.length, fetchProjects]);
 
   // 检测快捷键触发的创建请求
   useEffect(() => {
@@ -170,6 +185,12 @@ export default function ProjectListPage() {
     setConfirmDeleteId(id);
   };
 
+  const handleArchive = async (e: React.MouseEvent, id: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setConfirmArchiveId(id);
+  };
+
   const handleDoubleClick = async (project: Project) => {
     if (!project.folder_path) return;
     try {
@@ -249,25 +270,21 @@ export default function ProjectListPage() {
     }
   }, [selectedIds.size, filtered.length]);
 
+  const hasActiveFilters = filters.status.length > 0 || filters.type.length > 0 || filters.startDate || filters.endDate;
+
   return (
-    <div className="h-full flex flex-col p-6 animate-fade-up">
+    <div className="h-full flex flex-col animate-fade-in">
       {/* 页头 */}
-      <div className="flex items-start justify-between mb-5 shrink-0">
+      <div className="flex items-center justify-between px-6 pt-5 pb-4 shrink-0">
         <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-title" style={{ color: "var(--text-primary)" }}>
-              项目
-            </h1>
-          </div>
+          <h1 className="text-title" style={{ color: "var(--text-primary)" }}>
+            项目
+          </h1>
+          <p className="text-caption mt-0.5" style={{ color: "var(--text-muted)" }}>
+            {loading ? "加载中..." : `共 ${projects.length} 个项目`}
+          </p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            className="btn btn-outline"
-            onClick={() => setShowJoinDialog(true)}
-          >
-            <LinkIcon size={14} strokeWidth={1.5} />
-            链接项目
-          </button>
           <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
             <Plus size={14} strokeWidth={1.5} />
             新建项目
@@ -276,19 +293,67 @@ export default function ProjectListPage() {
       </div>
 
       {/* 工具栏 */}
-      <div className="flex items-center gap-3 mb-3 shrink-0">
+      <div className="flex items-center gap-2 px-6 pb-3 shrink-0 flex-wrap">
+        {/* 视图切换 */}
+        <div
+          className="flex items-center rounded-lg overflow-hidden"
+          style={{ border: "1px solid var(--border-default)" }}
+        >
+          <button
+            className="p-1.5 transition-colors"
+            style={{
+              background: viewMode === "table" ? "var(--gold-glow-strong)" : "transparent",
+              color: viewMode === "table" ? "var(--gold)" : "var(--text-muted)",
+              border: "none",
+              cursor: "pointer",
+            }}
+            onClick={() => {
+              setViewMode("table");
+              useSettingsStore.getState().saveSettings({ [VIEW_MODE_KEY]: "table" }).catch(() => {});
+            }}
+            title="表格视图"
+          >
+            <List size={14} strokeWidth={1.5} />
+          </button>
+          <button
+            className="p-1.5 transition-colors"
+            style={{
+              background: viewMode === "card" ? "var(--gold-glow-strong)" : "transparent",
+              color: viewMode === "card" ? "var(--gold)" : "var(--text-muted)",
+              border: "none",
+              cursor: "pointer",
+            }}
+            onClick={() => {
+              setViewMode("card");
+              useSettingsStore.getState().saveSettings({ [VIEW_MODE_KEY]: "card" }).catch(() => {});
+            }}
+            title="卡片视图"
+          >
+            <LayoutGrid size={14} strokeWidth={1.5} />
+          </button>
+        </div>
+
         {/* 搜索 */}
-        <div className="flex items-center gap-1.5 input-base !py-1 !px-2 !text-xs !rounded-md flex-1 max-w-xs">
-          <Search size={12} strokeWidth={1.5} style={{ color: "var(--text-muted)" }} />
+        <div className="search-input-wrapper" style={{ maxWidth: 240 }}>
+          <Search size={14} strokeWidth={1.5} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
           <input
             type="text"
-            placeholder="搜索编号、名称…"
+            placeholder="搜索编号、名称..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="bg-transparent outline-none w-full"
-            style={{ color: "var(--text-primary)" }}
           />
+          {search && (
+            <button
+              onClick={() => setSearch("")}
+              style={{ color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex" }}
+            >
+              <X size={12} strokeWidth={1.5} />
+            </button>
+          )}
         </div>
+
+        {/* 分隔线 */}
+        <div className="w-px h-5 mx-1" style={{ background: "var(--border-default)" }} />
 
         {/* 状态筛选 */}
         <MultiSelect
@@ -325,13 +390,13 @@ export default function ProjectListPage() {
             value={filters.startDate}
             onChange={(v) => updateFilter("startDate", v)}
             placeholder="起始日期"
-            className="input-base !py-1 !px-2 !text-xs !rounded-md"
+            className="input-base !py-1 !px-2.5 !text-xs !rounded-full"
           />
-          <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>—</span>
+          <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>至</span>
           <DatePicker
             value={filters.endDate}
             onChange={(v) => updateFilter("endDate", v)}
-            className="input-base !py-1 !px-2 !text-xs !rounded-md"
+            className="input-base !py-1 !px-2.5 !text-xs !rounded-full"
             placeholder="截止日期"
           />
           {(filters.startDate || filters.endDate) && (
@@ -347,9 +412,9 @@ export default function ProjectListPage() {
         </div>
 
         {/* 有筛选条件时显示清除按钮 */}
-        {(filters.status.length > 0 || filters.type.length > 0 || filters.startDate || filters.endDate) && (
+        {hasActiveFilters && (
           <button
-            className="text-[10px] underline cursor-pointer transition-colors hover-gold-text"
+            className="text-caption underline cursor-pointer transition-colors hover-gold-text"
             style={{ color: "var(--text-muted)", background: "none", border: "none" }}
             onClick={() => {
               setFilters(DEFAULT_FILTERS);
@@ -360,20 +425,33 @@ export default function ProjectListPage() {
           </button>
         )}
 
-        <span className="text-[11px] ml-auto" style={{ color: "var(--text-muted)" }}>
+        <span className="text-caption ml-auto" style={{ color: "var(--text-muted)" }}>
           {filtered.length} 个项目
         </span>
       </div>
 
-      {/* 表格 */}
-      <div className="flex-1 overflow-auto rounded-lg" style={{ border: "1px solid var(--border-default)" }}>
+      {/* 表格区域 */}
+      <div className={`flex-1 overflow-hidden mx-6 mb-5 ${viewMode === "table" ? "" : "overflow-auto"}`} style={{ borderRadius: "var(--radius-lg)", border: viewMode === "table" ? "1px solid var(--border-default)" : "none" }}>
         {loading ? (
-          <div className="flex items-center justify-center h-full text-sm" style={{ color: "var(--text-muted)" }}>
-            加载中…
-          </div>
+          <TableSkeleton />
         ) : filtered.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-sm" style={{ color: "var(--text-tertiary)" }}>
-            {search || filters.status.length > 0 || filters.type.length > 0 || filters.startDate || filters.endDate ? "没有匹配的项目" : "还没有项目"}
+          <EmptyState
+            hasFilters={Boolean(hasActiveFilters || search.trim())}
+            onCreateNew={() => setShowCreate(true)}
+          />
+        ) : viewMode === "card" ? (
+          <div className="grid gap-4 p-1 animate-stagger" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))" }}>
+            {filtered.map((project) => (
+              <ProjectCard
+                key={project.id}
+                project={project}
+                statuses={parsedStatuses}
+                types={parsedTypes}
+                onEdit={setEditProject}
+                onDelete={handleDelete}
+                onArchive={handleArchive}
+              />
+            ))}
           </div>
         ) : (
           <ProjectTable
@@ -387,12 +465,11 @@ export default function ProjectListPage() {
             handleToggleSelect={handleToggleSelect}
             handleStatusChange={handleStatusChange}
             handleDoubleClick={handleDoubleClick}
-            setShareProject={setShareProject}
             setEditProject={setEditProject}
             handleDelete={handleDelete}
+            handleArchive={handleArchive}
             statuses={parsedStatuses}
             types={parsedTypes}
-            shareStatus={shareStatus}
             onColumnResizeLive={handleColumnResizeLive}
             onColumnResizeEnd={handleColumnResizeEnd}
           />
@@ -428,49 +505,29 @@ export default function ProjectListPage() {
         />
       )}
 
-      {/* 分享项目弹窗 */}
-      {shareProject && (
-        <ShareProjectDialog
-          project={shareProject}
-          initialSharing={shareStatus.some(s => normalizePath(s.path) === normalizePath(shareProject.folder_path || ""))}
-          initialPort={shareStatus.find(s => normalizePath(s.path) === normalizePath(shareProject.folder_path || ""))?.port ?? 0}
-          onClose={() => {
-            setShareProject(null);
-            refreshShareStatus();
-          }}
-        />
-      )}
-
-      {/* 链接项目弹窗 */}
-      {showJoinDialog && (
-        <JoinShareDialog onClose={() => setShowJoinDialog(false)} />
-      )}
-
       {/* 底部批量操作浮窗 */}
       {selectedIds.size > 0 && (
         <div
-          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-5 py-3 rounded-xl animate-slide-up"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-5 py-3 animate-slide-up"
           style={{
             background: "var(--bg-surface)",
             border: "1px solid var(--gold)",
+            borderRadius: "var(--radius-lg)",
             boxShadow: "var(--shadow-gold-lg)",
           }}
         >
-          <span className="text-xs" style={{ color: "var(--gold)" }}>
+          <span className="text-caption font-medium" style={{ color: "var(--gold)" }}>
             已选 {selectedIds.size} 项
           </span>
           <button
             className="p-1 rounded transition-colors hover-gold-bg"
-            style={{ color: "var(--text-muted)", background: "none", border: "none" }}
+            style={{ color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer" }}
             onClick={() => setSelectedIds(new Set())}
             title="取消选择"
           >
             <X size={14} strokeWidth={1.5} />
           </button>
-          <div
-            className="w-px h-5 mx-1"
-            style={{ background: "var(--border-default)" }}
-          />
+          <div className="w-px h-5" style={{ background: "var(--border-default)" }} />
           <BatchStatusDropdown
             statuses={parsedStatuses}
             onApply={handleBatchStatusChange}
@@ -528,6 +585,97 @@ export default function ProjectListPage() {
           </p>
         </Modal>
       )}
+
+      {/* 归档确认弹窗 */}
+      {confirmArchiveId !== null && (
+        <Modal
+          open={true}
+          onClose={() => setConfirmArchiveId(null)}
+          title="确认归档"
+          footer={
+            <>
+              <button className="btn btn-ghost btn-sm" onClick={() => setConfirmArchiveId(null)}>取消</button>
+              <button className="btn btn-primary btn-sm" onClick={async () => {
+                try {
+                  await archiveApi.archive(confirmArchiveId);
+                  addToast({ type: "success", title: "归档成功", message: "项目已归档" });
+                  fetchProjects();
+                } catch (e) {
+                  addToast({ type: "error", title: "归档失败", message: String(e) });
+                }
+                setConfirmArchiveId(null);
+              }}>归档</button>
+            </>
+          }
+        >
+          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+            归档后项目将从主列表移除，文件夹将被压缩为 zip 存储。可在归档库中恢复。
+          </p>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ── 空状态 ──────────────────────────────────────────────────────
+
+function EmptyState({ hasFilters, onCreateNew }: { hasFilters: boolean; onCreateNew: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center h-full animate-fade-in" style={{ minHeight: 320 }}>
+      <div className="empty-illustration">
+        <FolderOpen size={40} strokeWidth={1.2} style={{ color: "var(--gold)" }} />
+      </div>
+      <h3 className="text-heading mt-5" style={{ color: "var(--text-primary)" }}>
+        {hasFilters ? "没有匹配的项目" : "还没有项目"}
+      </h3>
+      <p className="text-caption mt-1.5 max-w-xs text-center" style={{ color: "var(--text-muted)" }}>
+        {hasFilters
+          ? "尝试调整筛选条件，或清除筛选查看全部项目"
+          : "创建第一个项目，开始管理你的工作流程"}
+      </p>
+      {!hasFilters && (
+        <button className="btn btn-primary mt-5" onClick={onCreateNew}>
+          <Plus size={14} strokeWidth={1.5} />
+          新建项目
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ── 表格骨架屏 ─────────────────────────────────────────────────
+
+function TableSkeleton() {
+  return (
+    <div className="p-4 animate-fade-in">
+      {/* 表头骨架 */}
+      <div className="flex items-center gap-4 pb-3 mb-2" style={{ borderBottom: "1px solid var(--border-light)" }}>
+        <div className="skeleton" style={{ width: 16, height: 16 }} />
+        <div className="skeleton" style={{ width: 80, height: 12 }} />
+        <div className="skeleton" style={{ width: 160, height: 12 }} />
+        <div className="skeleton" style={{ width: 80, height: 12 }} />
+        <div className="skeleton" style={{ width: 60, height: 12 }} />
+        <div className="skeleton" style={{ width: 80, height: 12, marginLeft: "auto" }} />
+      </div>
+      {/* 行骨架 */}
+      {Array.from({ length: 8 }, (_, i) => (
+        <div
+          key={i}
+          className="flex items-center gap-4 py-3"
+          style={{ borderBottom: "1px solid var(--border-light)", animationDelay: `${i * 50}ms` }}
+        >
+          <div className="skeleton" style={{ width: 16, height: 16 }} />
+          <div className="skeleton" style={{ width: 60 + Math.random() * 30, height: 12 }} />
+          <div className="skeleton" style={{ width: 120 + Math.random() * 60, height: 12 }} />
+          <div className="skeleton" style={{ width: 56, height: 22, borderRadius: "var(--radius-full)" }} />
+          <div className="skeleton" style={{ width: 50 + Math.random() * 20, height: 12 }} />
+          <div className="flex gap-1.5 ml-auto">
+            <div className="skeleton" style={{ width: 24, height: 24, borderRadius: "var(--radius-sm)" }} />
+            <div className="skeleton" style={{ width: 24, height: 24, borderRadius: "var(--radius-sm)" }} />
+            <div className="skeleton" style={{ width: 24, height: 24, borderRadius: "var(--radius-sm)" }} />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -553,12 +701,7 @@ function MultiSelect({
   return (
     <div className="relative">
       <button
-        className="text-xs px-2.5 py-1 rounded-md transition-all hover-gold-border flex items-center gap-1"
-        style={{
-          background: count > 0 ? "var(--gold-glow)" : "var(--bg-surface-alt)",
-          border: "1px solid var(--border-light)",
-          color: count > 0 ? "var(--gold)" : "var(--text-secondary)",
-        }}
+        className={`filter-chip ${count > 0 ? "active" : ""}`}
         onClick={() => setOpen(!open)}
       >
         {label}{count > 0 ? ` (${count})` : ""}
@@ -568,17 +711,18 @@ function MultiSelect({
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div
-            className="absolute left-0 top-full mt-1 z-50 rounded-lg p-2 min-w-[140px] animate-fade-in"
+            className="absolute left-0 top-full mt-1.5 z-50 p-1.5 min-w-[160px] animate-scale-in"
             style={{
               background: "var(--bg-elevated)",
               border: "1px solid var(--border-default)",
-              boxShadow: "var(--shadow-gold-lg)",
+              borderRadius: "var(--radius-md)",
+              boxShadow: "var(--shadow-lg)",
             }}
           >
             {count > 0 && (
               <button
-                className="w-full text-left px-2 py-1.5 rounded-md text-xs transition-colors hover-gold-bg"
-                style={{ color: "var(--gold)", border: "none", cursor: "pointer" }}
+                className="w-full text-left px-2.5 py-1.5 rounded-md text-xs transition-colors hover-gold-bg"
+                style={{ color: "var(--gold)", border: "none", cursor: "pointer", background: "none" }}
                 onClick={() => { onClear(); setOpen(false); }}
               >
                 清除筛选
@@ -587,7 +731,7 @@ function MultiSelect({
             {items.map((item) => (
               <label
                 key={item.id}
-                className="flex items-center gap-2 px-2 py-1.5 rounded-md text-xs cursor-pointer transition-colors hover-gold-bg"
+                className="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs cursor-pointer transition-colors hover-surface-alt-bg"
                 style={{ color: selected.includes(item.id) ? "var(--gold)" : "var(--text-secondary)" }}
               >
                 <input

@@ -65,7 +65,10 @@ export default function Modal({
   return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center animate-fade-in"
-      style={{ background: "rgba(0,0,0,0.40)", backdropFilter: "blur(4px)" }}
+      style={{
+        background: "rgba(0,0,0,0.45)",
+        backdropFilter: "blur(12px) saturate(1.2)",
+      }}
       onClick={onClose}
     >
       <div
@@ -78,29 +81,27 @@ export default function Modal({
             background: "var(--bg-surface)",
             border: "1px solid var(--border-default)",
             borderRadius: "var(--radius-lg)",
-            boxShadow: "var(--shadow-lg)",
+            boxShadow: "var(--shadow-xl)",
           }}
         >
           {/* 头部 */}
           {title && (
             <div
-              className="flex items-center justify-between px-5 py-3.5"
+              className="flex items-center justify-between px-6 py-4"
               style={{ borderBottom: "1px solid var(--border-light)" }}
             >
-              <div className="flex items-center gap-3 min-w-0">
-                <h2
-                  className="text-base truncate"
-                  style={{ color: "var(--text-primary)" }}
-                >
-                  {title}
-                </h2>
-              </div>
+              <h2
+                className="text-base font-semibold truncate"
+                style={{ color: "var(--text-primary)" }}
+              >
+                {title}
+              </h2>
               <div className="flex items-center gap-2 shrink-0">
                 {headerExtra}
                 <button
                   onClick={onClose}
-                  className="p-1.5 rounded-md transition-all hover-gold-bg"
-                  style={{ color: "var(--text-tertiary)" }}
+                  className="p-1.5 rounded-lg transition-all hover-gold-bg"
+                  style={{ color: "var(--text-muted)" }}
                   aria-label="关闭"
                 >
                   <X size={16} strokeWidth={1.5} />
@@ -110,12 +111,12 @@ export default function Modal({
           )}
 
           {/* 内容 */}
-          <div className="px-5 py-4 overflow-y-auto">{children}</div>
+          <div className="px-6 py-5 overflow-y-auto">{children}</div>
 
           {/* 底部 */}
           {footer && (
             <div
-              className="flex items-center justify-end gap-2 px-5 py-3"
+              className="flex items-center justify-end gap-2 px-6 py-3.5"
               style={{ borderTop: "1px solid var(--border-light)" }}
             >
               {footer}

@@ -104,6 +104,20 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
         CREATE INDEX IF NOT EXISTS idx_project_files_project ON project_files(project_id);
         CREATE INDEX IF NOT EXISTS idx_status_history_project ON project_status_history(project_id);
         CREATE INDEX IF NOT EXISTS idx_milestones_project ON project_milestones(project_id);
+
+        -- 文件标记/备注
+        CREATE TABLE IF NOT EXISTS file_bookmarks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            file_name TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            note TEXT DEFAULT '',
+            starred INTEGER DEFAULT 1,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_file_bookmarks_project ON file_bookmarks(project_id);
         ",
     )?;
 
@@ -157,6 +171,7 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
         ("kanban_columns", "column_type", "ALTER TABLE kanban_columns ADD COLUMN column_type TEXT DEFAULT NULL"),
         ("kanban_cards", "gantt_task_id", "ALTER TABLE kanban_cards ADD COLUMN gantt_task_id INTEGER DEFAULT NULL"),
         ("kanban_cards", "due_date", "ALTER TABLE kanban_cards ADD COLUMN due_date TEXT DEFAULT NULL"),
+        ("kanban_cards", "linked_files", "ALTER TABLE kanban_cards ADD COLUMN linked_files TEXT DEFAULT '[]'"),
     ];
 
     for (table, col, alter_sql) in kanban_new_columns {
@@ -198,6 +213,41 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
             status TEXT NOT NULL DEFAULT 'connected',
             created_at TEXT NOT NULL DEFAULT (datetime('now'))
         );"
+    )?;
+
+    // ── 增量迁移：归档表 ─────────────────────────────────────────
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS archives (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER NOT NULL,
+            project_name TEXT NOT NULL,
+            project_number TEXT DEFAULT '',
+            project_type TEXT DEFAULT '',
+            category TEXT DEFAULT '',
+            original_folder_path TEXT DEFAULT '',
+            archive_path TEXT NOT NULL,
+            file_size INTEGER DEFAULT 0,
+            archived_at TEXT NOT NULL DEFAULT (datetime('now')),
+            previous_status TEXT DEFAULT 'planning'
+        );"
+    )?;
+
+    // ── 增量迁移：工作会话表 ──────────────────────────────────────
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS work_sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            name TEXT NOT NULL DEFAULT '',
+            open_files TEXT NOT NULL DEFAULT '[]',
+            active_tab TEXT NOT NULL DEFAULT 'files',
+            active_kanban_card_id INTEGER,
+            scroll_positions TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_work_sessions_project ON work_sessions(project_id);
+        "
     )?;
 
     // ── 增量迁移：合并旧 key project_root_path → default_project_path ──

@@ -28,12 +28,9 @@ import type {
   ScannedFolder,
   User,
   FolderEntry,
-  ClientInfo,
-  RemoteDirEntry,
-  ActivityLogEntry,
-  SharedConnection,
-  SharedProject,
-  RemoteProjectInfo,
+  FileBookmark,
+  ArchivedProject,
+  WorkSession,
 } from "@/types";
 
 // ── 项目管理 ──────────────────────────────────────────────────
@@ -166,6 +163,16 @@ export const kanbanApi = {
     invoke<KanbanCard>("sync_gantt_to_kanban", { taskId }),
 };
 
+// ── 卡片文件关联 ──────────────────────────────────────────────
+
+export const cardFileLinkApi = {
+  add: (cardId: number, fileName: string, filePath: string, linkType: string) =>
+    invoke<KanbanCard>("add_card_file_link", { cardId, fileName, filePath, linkType }),
+
+  remove: (cardId: number, filePath: string) =>
+    invoke<KanbanCard>("remove_card_file_link", { cardId, filePath }),
+};
+
 // ── 甘特图 ────────────────────────────────────────────────────
 
 export const ganttApi = {
@@ -216,6 +223,25 @@ export const fileApi = {
 
   listFolderContents: (path: string) =>
     invoke<FolderEntry>("list_folder_contents", { path }),
+};
+
+// ── 文件标记/备注 ──────────────────────────────────────────
+
+export const fileBookmarkApi = {
+  create: (projectId: number, fileName: string, filePath: string, note?: string) =>
+    invoke<FileBookmark>("create_file_bookmark", {
+      projectId, fileName, filePath, note: note ?? null,
+    }),
+
+  getAll: (projectId: number) =>
+    invoke<FileBookmark[]>("get_file_bookmarks", { projectId }),
+
+  update: (id: number, note?: string | null, starred?: boolean | null) =>
+    invoke<FileBookmark>("update_file_bookmark", {
+      id, note: note ?? null, starred: starred ?? null,
+    }),
+
+  delete: (id: number) => invoke<void>("delete_file_bookmark", { id }),
 };
 
 // ── 应用设置 ──────────────────────────────────────────────────
@@ -319,68 +345,6 @@ export const shortcutApi = {
     ),
 };
 
-// ── 局域网文件夹分享 ────────────────────────────────────────────
-
-export const shareApi = {
-  start: (path: string, password: string) =>
-    invoke<number>("start_folder_share", { path, password }),
-
-  stop: (port: number) => invoke<void>("stop_folder_share", { port }),
-
-  getStatus: () => invoke<{ port: number; path: string }[]>("get_share_status"),
-
-  getConnectedClients: (port: number) => invoke<ClientInfo[]>("get_connected_clients", { port }),
-
-  getActivityLog: (port: number) => invoke<ActivityLogEntry[]>("get_activity_log", { port }),
-
-  join: (addr: string, password: string) =>
-    invoke<string>("join_shared_folder", { addr, password }),
-
-  listRemote: (addr: string, password: string, path: string) =>
-    invoke<RemoteDirEntry[]>("list_remote_files", { addr, password, path }),
-
-  downloadRemote: (addr: string, password: string, remotePath: string, localPath: string) =>
-    invoke<string>("download_remote_file", { addr, password, remotePath, localPath }),
-
-  uploadRemote: (addr: string, password: string, remoteDir: string, fileName: string, localPath: string) =>
-    invoke<void>("upload_remote_file", { addr, password, remoteDir, fileName, localPath }),
-
-  // 共享连接管理（密码持久化）
-  getConnections: () => invoke<SharedConnection[]>("get_shared_connections"),
-
-  getConnectionPassword: (addr: string) =>
-    invoke<string>("get_connection_password", { addr }),
-
-  saveConnection: (addr: string, password: string, label: string) =>
-    invoke<void>("save_shared_connection", { addr, password, label }),
-
-  deleteConnection: (addr: string) =>
-    invoke<void>("delete_shared_connection", { addr }),
-
-  updateConnection: (addr: string, lastPath?: string) =>
-    invoke<void>("update_shared_connection", { addr, lastPath }),
-
-  testConnection: (addr: string, password: string) =>
-    invoke<boolean>("test_shared_connection", { addr, password }),
-
-  migrateLegacy: () => invoke<void>("migrate_legacy_connections"),
-
-  // 共享项目管理
-  getSharedProjects: () => invoke<SharedProject[]>("get_shared_projects"),
-
-  importProject: (addr: string, password: string, rootPath: string) =>
-    invoke<number>("import_shared_project", { addr, password, rootPath }),
-
-  syncProject: (sharedProjectId: number) =>
-    invoke<void>("sync_shared_project", { sharedProjectId }),
-
-  disconnectProject: (sharedProjectId: number, deleteLocal: boolean) =>
-    invoke<void>("disconnect_shared_project", { sharedProjectId, deleteLocal }),
-
-  getRemoteProjectInfo: (addr: string, password: string) =>
-    invoke<RemoteProjectInfo>("get_remote_project_info", { addr, password }),
-};
-
 // ── 系统工具 ──────────────────────────────────────────────────
 
 export const systemApi = {
@@ -402,5 +366,47 @@ export const userApi = {
 
   uploadAvatar: (imageData: string) =>
     invoke<string>("upload_avatar", { imageData }),
+};
+
+// ── 归档管理 ──────────────────────────────────────────────────
+
+export const archiveApi = {
+  archive: (projectId: number) =>
+    invoke<ArchivedProject>("archive_project", { projectId }),
+
+  unarchive: (archiveId: number, restorePath?: string | null) =>
+    invoke<void>("unarchive_project", { archiveId, restorePath: restorePath ?? null }),
+
+  getAll: () => invoke<ArchivedProject[]>("get_archived_projects"),
+};
+
+// ── 工作会话 ──────────────────────────────────────────────────
+
+export const workSessionApi = {
+  save: (
+    projectId: number,
+    openFiles: string,
+    activeTab: string,
+    activeKanbanCardId?: number | null,
+    name?: string,
+    scrollPositions?: string | null,
+  ) =>
+    invoke<WorkSession>("save_work_session", {
+      projectId,
+      name: name ?? null,
+      openFiles,
+      activeTab,
+      activeKanbanCardId: activeKanbanCardId ?? null,
+      scrollPositions: scrollPositions ?? null,
+    }),
+
+  getAll: (projectId: number) =>
+    invoke<WorkSession[]>("get_work_sessions", { projectId }),
+
+  restore: (sessionId: number) =>
+    invoke<WorkSession>("restore_work_session", { sessionId }),
+
+  delete: (sessionId: number) =>
+    invoke<void>("delete_work_session", { sessionId }),
 };
 

@@ -102,12 +102,10 @@ export default function ProfileSection({ onDirtyChange }: { onDirtyChange?: (dir
 
   return (
     <section className="animate-slide-up">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <h2 className="text-lg" style={{ color: "var(--text-primary)" }}>
-            用户资料
-          </h2>
-        </div>
+      <div className="flex items-center justify-between mb-5">
+        <h2 className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
+          用户资料
+        </h2>
         <button
           className="btn btn-primary btn-sm"
           onClick={handleSave}
@@ -119,8 +117,8 @@ export default function ProfileSection({ onDirtyChange }: { onDirtyChange?: (dir
         </button>
       </div>
 
-      {/* 头像区域：gold-glow-strong + gold 边框 */}
-      <div className="flex items-center gap-5 mb-4">
+      {/* 头像区域 */}
+      <div className="flex items-center gap-5 mb-6">
         {user?.avatar_path ? (
           <div
             className="w-20 h-20 rounded-full"
@@ -137,7 +135,7 @@ export default function ProfileSection({ onDirtyChange }: { onDirtyChange?: (dir
           </div>
         ) : (
           <div
-            className="w-20 h-20 rounded-full flex items-center justify-center text-xl font-medium"
+            className="w-20 h-20 rounded-full flex items-center justify-center text-xl font-semibold"
             style={{
               background: "var(--gold-glow-strong)",
               color: "var(--gold)",
@@ -148,15 +146,12 @@ export default function ProfileSection({ onDirtyChange }: { onDirtyChange?: (dir
             {user?.name ? getInitials(user.name) : "?"}
           </div>
         )}
-        <div className="space-y-2">
-          <p className="text-sm" style={{ color: "var(--text-primary)" }}>
+        <div className="space-y-2.5">
+          <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
             {user?.name || "未设置用户名"}
           </p>
           <div className="flex gap-2">
-            <button
-              className="btn btn-outline btn-sm"
-              onClick={handleAvatarUpload}
-            >
+            <button className="btn btn-outline btn-sm" onClick={handleAvatarUpload}>
               <Camera size={13} strokeWidth={1.5} />
               上传图片
             </button>
@@ -174,13 +169,13 @@ export default function ProfileSection({ onDirtyChange }: { onDirtyChange?: (dir
         </div>
       </div>
 
-      {/* Emoji 预设头像选择：品牌 grid 布局 */}
+      {/* Emoji 预设头像选择 */}
       {showEmojiPicker && (
         <div
-          className="mb-6 p-4 rounded-lg animate-slide-up"
-          style={{ background: "var(--gold-glow)", border: "1px solid var(--gold)" }}
+          className="mb-6 p-4 rounded-xl animate-slide-up"
+          style={{ background: "var(--gold-glow)", border: "1px solid var(--gold-glow-strong)" }}
         >
-          <p className="text-xs mb-3" style={{ color: "var(--gold)" }}>
+          <p className="text-xs mb-3 font-medium" style={{ color: "var(--gold)" }}>
             选择一个 Emoji 作为头像
           </p>
           <div className="grid grid-cols-8 gap-2">
@@ -202,11 +197,9 @@ export default function ProfileSection({ onDirtyChange }: { onDirtyChange?: (dir
         </div>
       )}
 
-      {/* 用户名输入：.input-base */}
+      {/* 用户名输入 */}
       <div className="mb-6">
-        <label className="block text-xs mb-1.5" style={{ color: "var(--text-muted)" }}>
-          用户名
-        </label>
+        <label className="form-label">用户名</label>
         <input
           type="text"
           value={name}

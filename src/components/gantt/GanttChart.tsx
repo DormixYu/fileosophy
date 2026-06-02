@@ -303,13 +303,44 @@ export default function GanttChart({ projectId }: Props) {
             <div style={{ position: "relative" }}>
               {/* 今日线 */}
               <div
-                className="absolute top-0 bottom-0 w-0.5 z-10 pointer-events-none"
+                className="absolute top-0 bottom-0 z-10 pointer-events-none"
                 style={{
-                  left: NAME_WIDTH + daysBetween(minDate, today) * DAY_WIDTH,
-                  background: "var(--color-danger)",
-                  opacity: 0.6,
+                  left: NAME_WIDTH + daysBetween(minDate, today) * DAY_WIDTH - 0.5,
+                  width: 1,
+                  background: "var(--gold)",
+                  opacity: 0.7,
                 }}
               />
+              {/* 今日线虚线叠加 */}
+              <div
+                className="absolute top-0 bottom-0 z-10 pointer-events-none"
+                style={{
+                  left: NAME_WIDTH + daysBetween(minDate, today) * DAY_WIDTH - 0.5,
+                  width: 1,
+                  backgroundImage: "repeating-linear-gradient(to bottom, var(--gold) 0px, var(--gold) 4px, transparent 4px, transparent 8px)",
+                  opacity: 0.4,
+                }}
+              />
+              {/* 今日标签 */}
+              <div
+                className="absolute z-20 pointer-events-none"
+                style={{
+                  left: NAME_WIDTH + daysBetween(minDate, today) * DAY_WIDTH,
+                  top: -2,
+                  transform: "translateX(-50%)",
+                }}
+              >
+                <span
+                  className="text-[9px] font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap"
+                  style={{
+                    background: "var(--gold)",
+                    color: "var(--text-on-primary, #fff)",
+                    boxShadow: "0 1px 4px rgba(184, 134, 11, 0.3)",
+                  }}
+                >
+                  今天
+                </span>
+              </div>
 
               {/* SVG 依赖箭头 */}
               {arrows.length > 0 && (
@@ -628,23 +659,26 @@ function GanttRow({
         </div>
         {/* 任务条 */}
         <div
-          className="absolute rounded-sm transition-all cursor-pointer hover:opacity-100"
+          className="absolute transition-all duration-200 ease-out cursor-pointer hover:brightness-110"
           style={{
             top: BAR_TOP,
             left: offset * DAY_WIDTH,
             width: Math.max(width * DAY_WIDTH, 4),
             height: BAR_HEIGHT,
-            background: `linear-gradient(90deg, var(--gold), var(--gold-light))`,
-            opacity: 0.85,
+            borderRadius: 6,
+            background: `linear-gradient(135deg, var(--gold) 0%, var(--gold-light) 100%)`,
+            opacity: 0.9,
+            boxShadow: "0 1px 3px rgba(184, 134, 11, 0.15)",
           }}
           onClick={onClick}
         >
           <div
-            className="h-full rounded-sm"
+            className="h-full"
             style={{
               width: `${task.progress * 100}%`,
-              background: "var(--gold-dark)",
-              opacity: 0.6,
+              borderRadius: 6,
+              background: "linear-gradient(135deg, var(--gold-dark) 0%, var(--gold) 100%)",
+              opacity: 0.65,
             }}
           />
         </div>
